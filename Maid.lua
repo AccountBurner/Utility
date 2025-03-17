@@ -13,6 +13,7 @@ function Maid:AddTask(task, feature)
     assert(task ~= nil, "Task cannot be nil")
     
     if feature then
+        assert(type(feature) == "string" or type(feature) == "number", "Feature must be a string or number")
         self._features[feature] = self._features[feature] or {}
         table.insert(self._features[feature], task)
     end
@@ -90,6 +91,8 @@ function Maid:_cleanupTask(task)
         task()
     elseif typeof(task) == "RBXScriptConnection" then
         task:Disconnect()
+    elseif typeof(task) == "Instance" then
+        task:Destroy()
     elseif typeof(task) == "table" and task.Destroy then
         task:Destroy()
     elseif typeof(task) == "table" and task.Disconnect then
@@ -98,11 +101,23 @@ function Maid:_cleanupTask(task)
         task:destroy()
     elseif typeof(task) == "table" and task.disconnect then
         task:disconnect()
+    elseif typeof(task) == "table" and task.Clean then
+        task:Clean()
     end
+end
+
+function Maid:Clean()
+    for _, task in ipairs(self._tasks) do
+        self:_cleanupTask(task)
+    end
+    table.clear(self._tasks)
+    table.clear(self._features)
+    table.clear(self._indices)
 end
 
 function Maid:Cleanup(feature)
     if feature then
+        assert(type(feature) == "string" or type(feature) == "number", "Feature must be a string or number")
         for _, task in ipairs(self._features[feature] or {}) do
             self:_cleanupTask(task)
         end
