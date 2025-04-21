@@ -5,8 +5,7 @@ function Maid.new()
     return setmetatable({
         _tasks = {},
         _features = {},
-        _indices = {},
-        _childMaids = {}
+        _indices = {}
     }, Maid)
 end
 
@@ -24,19 +23,24 @@ function Maid:AddTask(task, feature)
 end
 
 function Maid:Add(task)
+    assert(task ~= nil, "Task cannot be nil")
     return self:AddTask(task)
 end
 
 function Maid:GiveTask(task)
+    assert(task ~= nil, "Task cannot be nil")
     return self:AddTask(task)
 end
 
 function Maid:GivePromise(promise)
-    if not promise or promise.Status == "Rejected" or promise.Status == "Resolved" then
+    assert(promise ~= nil, "Promise cannot be nil")
+    
+    if promise.Status == "Rejected" or promise.Status == "Resolved" then
         return promise
     end
     
-    local connection = promise:Finally(function()
+    local connection
+    connection = promise:Finally(function()
         self:Remove(connection)
     end)
     
@@ -45,56 +49,19 @@ end
 
 function Maid:__newindex(index, task)
     if task == nil then
-        -- If task is nil, and there's a child maid with this name, clean it up
-        if self._childMaids[index] then
-            self:Remove(self._childMaids[index])
-            self._childMaids[index] = nil
-        end
-        
-        -- Clean up the indexed task if it exists
         self:Remove(self._indices[index])
         self._indices[index] = nil
         return
     end
     
-    -- If task is a Maid, register it as a child maid
-    if type(task) == "table" and getmetatable(task) == Maid then
-        self._childMaids[index] = task
-        self:AddTask(task)
-        return
-    end
-    
-    -- Otherwise, treat it as a normal task
     self._indices[index] = task
     self:AddTask(task)
 end
 
-function Maid:__index(index)
-    -- Check if it's a method from the metatable
-    local value = Maid[index]
-    if value then
-        return value
-    end
-    
-    -- Check if it's a child maid
-    if self._childMaids[index] then
-        return self._childMaids[index]
-    end
-    
-    -- Allow accessing _indices directly
-    if self._indices[index] then
-        return self._indices[index]
-    end
-    
-    -- Creating dynamic child Maids when accessed if they don't exist
-    local childMaid = Maid.new()
-    self._childMaids[index] = childMaid
-    self:AddTask(childMaid)
-    return childMaid
-end
-
 function Maid:Remove(task)
-    if not task then return end
+    if task == nil then
+        return
+    end
     
     for i, v in ipairs(self._tasks) do
         if v == task then
@@ -104,7 +71,7 @@ function Maid:Remove(task)
         end
     end
     
-    for _, tasks in pairs(self._features) do
+    for feature, tasks in pairs(self._features) do
         for i, v in ipairs(tasks) do
             if v == task then
                 local taskToClean = table.remove(tasks, i)
@@ -113,58 +80,39 @@ function Maid:Remove(task)
             end
         end
     end
-    
-    -- Also check child maids
-    for key, childMaid in pairs(self._childMaids) do
-        if childMaid == task then
-            self._childMaids[key] = nil
-            self:_cleanupTask(childMaid)
-            return
-        end
-    end
 end
 
 function Maid:_cleanupTask(task)
-    if not task then return end
+    if task == nil then
+        return
+    end
     
-    local taskType = typeof(task)
-    
-    if taskType == "function" then
+    if typeof(task) == "function" then
         task()
-    elseif taskType == "RBXScriptConnection" then
+    elseif typeof(task) == "RBXScriptConnection" then
         task:Disconnect()
-    elseif taskType == "Instance" then
+    elseif typeof(task) == "Instance" then
         task:Destroy()
-    elseif taskType == "table" then
-        if task.Destroy then
-            task:Destroy()
-        elseif task.Disconnect then
-            task:Disconnect()
-        elseif task.destroy then
-            task:destroy()
-        elseif task.disconnect then
-            task:disconnect()
-        elseif task.Clean then
-            task:Clean()
-        end
+    elseif typeof(task) == "table" and task.Destroy then
+        task:Destroy()
+    elseif typeof(task) == "table" and task.Disconnect then
+        task:Disconnect()
+    elseif typeof(task) == "table" and task.destroy then
+        task:destroy()
+    elseif typeof(task) == "table" and task.disconnect then
+        task:disconnect()
+    elseif typeof(task) == "table" and task.Clean then
+        task:Clean()
     end
 end
 
 function Maid:Clean()
-    -- Clean up child maids first
-    for key, childMaid in pairs(self._childMaids) do
-        self:_cleanupTask(childMaid)
-    end
-    
-    -- Clean up tasks
     for _, task in ipairs(self._tasks) do
         self:_cleanupTask(task)
     end
-    
     table.clear(self._tasks)
     table.clear(self._features)
     table.clear(self._indices)
-    table.clear(self._childMaids)
 end
 
 function Maid:Cleanup(feature)
@@ -177,7 +125,13 @@ function Maid:Cleanup(feature)
         return
     end
     
-    self:Clean()
+    for _, task in ipairs(self._tasks) do
+        self:_cleanupTask(task)
+    end
+    
+    self._tasks = {}
+    self._features = {}
+    self._indices = {}
 end
 
 function Maid:Destroy()
@@ -186,163 +140,6 @@ end
 
 function Maid:DoCleaning()
     self:Cleanup()
-end
-
-function Maid:AddFeature(featureName)
-    if not self._features[featureName] then
-        self._features[featureName] = {}
-    end
-    return featureName
-end
-
-function Maid:TasksForFeature(featureName)
-    return self._features[featureName] or {}
-end
-
-function Maid:HasFeature(featureName)
-    return self._features[featureName] ~= nil and #self._features[featureName] > 0
-end
-
-function Maid:CreateDependencyBox(featureName, dependencies)
-    self:AddFeature(featureName)
-    
-    local depBox = {
-        _maid = self,
-        _featureName = featureName,
-        _dependencies = dependencies or {},
-        _enabled = false
-    }
-    
-    function depBox:SetupDependencies(deps)
-        self._dependencies = deps or {}
-        return self
-    end
-    
-    function depBox:AddToggle(id, options)
-        options = options or {}
-        options.Callback = function(value)
-            if options.OriginalCallback then
-                options.OriginalCallback(value)
-            end
-            self:_checkState()
-        end
-        
-        local toggle = self._maid:Add(id)
-        toggle.Value = options.Default or false
-        toggle.OnChanged = function(callback)
-            callback(toggle.Value)
-        end
-        
-        self._maid:AddTask(toggle, self._featureName)
-        return toggle
-    end
-    
-    function depBox:AddDependencyBox()
-        local subDepBox = self._maid:CreateDependencyBox(self._featureName .. ".sub")
-        subDepBox._parentBox = self
-        
-        function subDepBox:_checkState()
-            local parentEnabled = self._parentBox and self._parentBox._enabled or true
-            local allConditionsMet = parentEnabled
-            
-            if not allConditionsMet then
-                self._enabled = false
-                return false
-            end
-            
-            for _, dep in ipairs(self._dependencies) do
-                local toggle, expectedState = dep[1], dep[2]
-                if toggle and toggle.Value ~= expectedState then
-                    allConditionsMet = false
-                    break
-                end
-            end
-            
-            self._enabled = allConditionsMet
-            return allConditionsMet
-        end
-        
-        return subDepBox
-    end
-    
-    function depBox:_checkState()
-        local allConditionsMet = true
-        
-        for _, dep in ipairs(self._dependencies) do
-            local toggle, expectedState = dep[1], dep[2]
-            if toggle and toggle.Value ~= expectedState then
-                allConditionsMet = false
-                break
-            end
-        end
-        
-        self._enabled = allConditionsMet
-        return allConditionsMet
-    end
-    
-    function depBox:IsEnabled()
-        return self._enabled
-    end
-    
-    function depBox:AddTask(task)
-        return self._maid:AddTask(task, self._featureName)
-    end
-    
-    return depBox
-end
-
-function Maid:Connect(signal, callback, feature)
-    local connection = signal:Connect(callback)
-    return self:AddTask(connection, feature)
-end
-
-function Maid:BindToRenderStep(name, priority, callback, feature)
-    game:GetService("RunService"):BindToRenderStep(name, priority, callback)
-    
-    local unbind = function()
-        game:GetService("RunService"):UnbindFromRenderStep(name)
-    end
-    
-    return self:AddTask(unbind, feature)
-end
-
-function Maid:AddHeartbeat(callback, feature)
-    return self:Connect(game:GetService("RunService").Heartbeat, callback, feature)
-end
-
-function Maid:CreateLoop(interval, callback, feature)
-    local running = true
-    
-    task.spawn(function()
-        while running and task.wait(interval) do
-            callback()
-        end
-    end)
-    
-    local stop = function()
-        running = false
-    end
-    
-    return self:AddTask(stop, feature)
-end
-
--- Add child maid management
-function Maid:AddChildMaid(name)
-    local childMaid = Maid.new()
-    self._childMaids[name] = childMaid
-    self:AddTask(childMaid)
-    return childMaid
-end
-
-function Maid:GetChildMaid(name)
-    if not self._childMaids[name] then
-        return self:AddChildMaid(name)
-    end
-    return self._childMaids[name]
-end
-
-function Maid:HasChildMaid(name)
-    return self._childMaids[name] ~= nil
 end
 
 return Maid
