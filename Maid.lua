@@ -23,24 +23,19 @@ function Maid:AddTask(task, feature)
 end
 
 function Maid:Add(task)
-    assert(task ~= nil, "Task cannot be nil")
     return self:AddTask(task)
 end
 
 function Maid:GiveTask(task)
-    assert(task ~= nil, "Task cannot be nil")
     return self:AddTask(task)
 end
 
 function Maid:GivePromise(promise)
-    assert(promise ~= nil, "Promise cannot be nil")
-    
-    if promise.Status == "Rejected" or promise.Status == "Resolved" then
+    if not promise or promise.Status == "Rejected" or promise.Status == "Resolved" then
         return promise
     end
     
-    local connection
-    connection = promise:Finally(function()
+    local connection = promise:Finally(function()
         self:Remove(connection)
     end)
     
@@ -59,9 +54,7 @@ function Maid:__newindex(index, task)
 end
 
 function Maid:Remove(task)
-    if task == nil then
-        return
-    end
+    if not task then return end
     
     for i, v in ipairs(self._tasks) do
         if v == task then
@@ -71,7 +64,7 @@ function Maid:Remove(task)
         end
     end
     
-    for feature, tasks in pairs(self._features) do
+    for _, tasks in pairs(self._features) do
         for i, v in ipairs(tasks) do
             if v == task then
                 local taskToClean = table.remove(tasks, i)
@@ -83,26 +76,28 @@ function Maid:Remove(task)
 end
 
 function Maid:_cleanupTask(task)
-    if task == nil then
-        return
-    end
+    if not task then return end
     
-    if typeof(task) == "function" then
+    local taskType = typeof(task)
+    
+    if taskType == "function" then
         task()
-    elseif typeof(task) == "RBXScriptConnection" then
+    elseif taskType == "RBXScriptConnection" then
         task:Disconnect()
-    elseif typeof(task) == "Instance" then
+    elseif taskType == "Instance" then
         task:Destroy()
-    elseif typeof(task) == "table" and task.Destroy then
-        task:Destroy()
-    elseif typeof(task) == "table" and task.Disconnect then
-        task:Disconnect()
-    elseif typeof(task) == "table" and task.destroy then
-        task:destroy()
-    elseif typeof(task) == "table" and task.disconnect then
-        task:disconnect()
-    elseif typeof(task) == "table" and task.Clean then
-        task:Clean()
+    elseif taskType == "table" then
+        if task.Destroy then
+            task:Destroy()
+        elseif task.Disconnect then
+            task:Disconnect()
+        elseif task.destroy then
+            task:destroy()
+        elseif task.disconnect then
+            task:disconnect()
+        elseif task.Clean then
+            task:Clean()
+        end
     end
 end
 
@@ -125,13 +120,7 @@ function Maid:Cleanup(feature)
         return
     end
     
-    for _, task in ipairs(self._tasks) do
-        self:_cleanupTask(task)
-    end
-    
-    self._tasks = {}
-    self._features = {}
-    self._indices = {}
+    self:Clean()
 end
 
 function Maid:Destroy()
@@ -140,6 +129,144 @@ end
 
 function Maid:DoCleaning()
     self:Cleanup()
+end
+
+function Maid:AddFeature(featureName)
+    if not self._features[featureName] then
+        self._features[featureName] = {}
+    end
+    return featureName
+end
+
+function Maid:TasksForFeature(featureName)
+    return self._features[featureName] or {}
+end
+
+function Maid:HasFeature(featureName)
+    return self._features[featureName] ~= nil and #self._features[featureName] > 0
+end
+
+function Maid:CreateDependencyBox(featureName, dependencies)
+    self:AddFeature(featureName)
+    
+    local depBox = {
+        _maid = self,
+        _featureName = featureName,
+        _dependencies = dependencies or {},
+        _enabled = false
+    }
+    
+    function depBox:SetupDependencies(deps)
+        self._dependencies = deps or {}
+        return self
+    end
+    
+    function depBox:AddToggle(id, options)
+        options = options or {}
+        options.Callback = function(value)
+            if options.OriginalCallback then
+                options.OriginalCallback(value)
+            end
+            self:_checkState()
+        end
+        
+        local toggle = self._maid:Add(id)
+        toggle.Value = options.Default or false
+        toggle.OnChanged = function(callback)
+            callback(toggle.Value)
+        end
+        
+        self._maid:AddTask(toggle, self._featureName)
+        return toggle
+    end
+    
+    function depBox:AddDependencyBox()
+        local subDepBox = self._maid:CreateDependencyBox(self._featureName .. ".sub")
+        subDepBox._parentBox = self
+        
+        function subDepBox:_checkState()
+            local parentEnabled = self._parentBox and self._parentBox._enabled or true
+            local allConditionsMet = parentEnabled
+            
+            if not allConditionsMet then
+                self._enabled = false
+                return false
+            end
+            
+            for _, dep in ipairs(self._dependencies) do
+                local toggle, expectedState = dep[1], dep[2]
+                if toggle and toggle.Value ~= expectedState then
+                    allConditionsMet = false
+                    break
+                end
+            end
+            
+            self._enabled = allConditionsMet
+            return allConditionsMet
+        end
+        
+        return subDepBox
+    end
+    
+    function depBox:_checkState()
+        local allConditionsMet = true
+        
+        for _, dep in ipairs(self._dependencies) do
+            local toggle, expectedState = dep[1], dep[2]
+            if toggle and toggle.Value ~= expectedState then
+                allConditionsMet = false
+                break
+            end
+        end
+        
+        self._enabled = allConditionsMet
+        return allConditionsMet
+    end
+    
+    function depBox:IsEnabled()
+        return self._enabled
+    end
+    
+    function depBox:AddTask(task)
+        return self._maid:AddTask(task, self._featureName)
+    end
+    
+    return depBox
+end
+
+function Maid:Connect(signal, callback, feature)
+    local connection = signal:Connect(callback)
+    return self:AddTask(connection, feature)
+end
+
+function Maid:BindToRenderStep(name, priority, callback, feature)
+    game:GetService("RunService"):BindToRenderStep(name, priority, callback)
+    
+    local unbind = function()
+        game:GetService("RunService"):UnbindFromRenderStep(name)
+    end
+    
+    return self:AddTask(unbind, feature)
+end
+
+function Maid:AddHeartbeat(callback, feature)
+    return self:Connect(game:GetService("RunService").Heartbeat, callback, feature)
+end
+
+function Maid:CreateLoop(interval, callback, feature)
+    local running = true
+    
+    task.spawn(function()
+        while running and task.wait(interval) do
+            callback()
+        end
+    end)
+    
+    local stop = function()
+        running = false
+    end
+    
+    return self:AddTask(stop, feature)
 end
 
 return Maid
