@@ -5,7 +5,8 @@ function Maid.new()
     return setmetatable({
         _tasks = {},
         _features = {},
-        _indices = {}
+        _indices = {},
+        _childMaids = {}
     }, Maid)
 end
 
@@ -44,13 +45,52 @@ end
 
 function Maid:__newindex(index, task)
     if task == nil then
+        -- If task is nil, and there's a child maid with this name, clean it up
+        if self._childMaids[index] then
+            self:Remove(self._childMaids[index])
+            self._childMaids[index] = nil
+        end
+        
+        -- Clean up the indexed task if it exists
         self:Remove(self._indices[index])
         self._indices[index] = nil
         return
     end
     
+    -- If task is a Maid, register it as a child maid
+    if type(task) == "table" and getmetatable(task) == Maid then
+        self._childMaids[index] = task
+        self:AddTask(task)
+        return
+    end
+    
+    -- Otherwise, treat it as a normal task
     self._indices[index] = task
     self:AddTask(task)
+end
+
+function Maid:__index(index)
+    -- Check if it's a method from the metatable
+    local value = Maid[index]
+    if value then
+        return value
+    end
+    
+    -- Check if it's a child maid
+    if self._childMaids[index] then
+        return self._childMaids[index]
+    end
+    
+    -- Allow accessing _indices directly
+    if self._indices[index] then
+        return self._indices[index]
+    end
+    
+    -- Creating dynamic child Maids when accessed if they don't exist
+    local childMaid = Maid.new()
+    self._childMaids[index] = childMaid
+    self:AddTask(childMaid)
+    return childMaid
 end
 
 function Maid:Remove(task)
@@ -71,6 +111,15 @@ function Maid:Remove(task)
                 self:_cleanupTask(taskToClean)
                 return
             end
+        end
+    end
+    
+    -- Also check child maids
+    for key, childMaid in pairs(self._childMaids) do
+        if childMaid == task then
+            self._childMaids[key] = nil
+            self:_cleanupTask(childMaid)
+            return
         end
     end
 end
@@ -102,12 +151,20 @@ function Maid:_cleanupTask(task)
 end
 
 function Maid:Clean()
+    -- Clean up child maids first
+    for key, childMaid in pairs(self._childMaids) do
+        self:_cleanupTask(childMaid)
+    end
+    
+    -- Clean up tasks
     for _, task in ipairs(self._tasks) do
         self:_cleanupTask(task)
     end
+    
     table.clear(self._tasks)
     table.clear(self._features)
     table.clear(self._indices)
+    table.clear(self._childMaids)
 end
 
 function Maid:Cleanup(feature)
@@ -267,6 +324,25 @@ function Maid:CreateLoop(interval, callback, feature)
     end
     
     return self:AddTask(stop, feature)
+end
+
+-- Add child maid management
+function Maid:AddChildMaid(name)
+    local childMaid = Maid.new()
+    self._childMaids[name] = childMaid
+    self:AddTask(childMaid)
+    return childMaid
+end
+
+function Maid:GetChildMaid(name)
+    if not self._childMaids[name] then
+        return self:AddChildMaid(name)
+    end
+    return self._childMaids[name]
+end
+
+function Maid:HasChildMaid(name)
+    return self._childMaids[name] ~= nil
 end
 
 return Maid
