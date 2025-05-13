@@ -536,13 +536,15 @@ function InstanceEspObject:create(class, properties)
 end
 
 function InstanceEspObject:Destruct()
-	self.maid:Cleanup();
-	clear(self);
-	-- Clear reference in the cache
-	local cache = self.interface._instanceCache;
-	if cache and cache[self.instance] then
-		cache[self.instance] = nil;
-	end
+    if self.interface and self.interface._instanceCache then
+        local cache = self.interface._instanceCache;
+        if cache[self.instance] then
+            cache[self.instance] = nil;
+        end
+    end
+    
+    self.maid:Cleanup();
+    clear(self);
 end
 
 function InstanceEspObject:Update()
@@ -860,14 +862,12 @@ function InstanceObject:Construct()
 end
 
 function InstanceObject:Destruct()
-	-- Hide text immediately when destructing
 	if self.text then
 		self.text.Visible = false;
 	end
 	
 	self.maid:Cleanup();
 	
-	-- Clear reference in the cache
 	local cache = EspInterface._instanceCache;
 	if cache and cache[self.instance] then
 		cache[self.instance] = nil;
@@ -1079,7 +1079,7 @@ function EspInterface.AddInstanceEsp(instance, customOptions)
 	
 	local cache = EspInterface._instanceCache;
 	if cache[instance] then
-		warn("Instance ESP handler already exists for " .. instance.Name);
+		--warn("Instance ESP handler already exists for " .. instance.Name);
 		return cache[instance];
 	end
 	
@@ -1096,7 +1096,7 @@ function EspInterface.AddInstance(instance, options)
 	
 	local cache = EspInterface._instanceCache;
 	if cache[instance] then
-		warn("Instance handler already exists for " .. instance.Name);
+		--warn("Instance handler already exists for " .. instance.Name);
 		return cache[instance];
 	end
 	
