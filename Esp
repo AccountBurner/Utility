@@ -739,7 +739,7 @@ function InstanceEspObject:Render()
 		end
 	end
 	
-	visible.healthText.Visible = enabled and onScreen and options.healthText and self.health;
+    visible.healthText.Visible = enabled and onScreen and options.healthText and self.health ~= nil;
 	if visible.healthText.Visible then
 		local barFrom = corners.topLeft - HEALTH_BAR_OFFSET;
 		local barTo = corners.bottomLeft - HEALTH_BAR_OFFSET;
@@ -1345,5 +1345,4 @@ function EspInterface.SetupNpcEsp(options)
 	
 	return npcOptions;
 end]]
-
 return EspInterface;
