@@ -1,318 +1,275 @@
-local MaidSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Maid.lua")
-local SignalSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Signal")
-local ServicesSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Services")
+if not LPH_OBFUSCATED then
+    LPH_NO_VIRTUALIZE = function(f) return f end;
+    LPH_JIT = function(f) return f end;
+    LPH_CRASH = function() while true do end end;
+end;
 
-local Maid = loadstring(MaidSource)()
-local Signal = loadstring(SignalSource)()
-local Services = loadstring(ServicesSource)()
+local MaidSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Maid.lua");
+local SignalSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Signal");
+local ServicesSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Services");
 
-local TweenService, UserInputService = Services:Get('TweenService', 'UserInputService')
+local Maid = loadstring(MaidSource)();
+local Signal = loadstring(SignalSource)();
+local Services = loadstring(ServicesSource)();
 
-local Notifications = {}
+local TweenService, UserInputService = Services:Get('TweenService', 'UserInputService');
 
-local Notification = {}
-Notification.__index = Notification
-Notification.NotifGap = 40
+local Notification = {};
+Notification.__index = Notification;
+Notification.NotifGap = 25;
 
-local viewportSize = workspace.CurrentCamera.ViewportSize
+local viewportSize = workspace.CurrentCamera.ViewportSize;
+local notifications = {};
+local isMoving = false;
 
-local TWEEN_INFO = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
-local VALUE_NAMES = {
-    number = 'NumberValue',
-    Color3 = 'Color3Value',
-    Vector2 = 'Vector3Value',
-}
+local MODERN_COLORS = {
+    background = Color3.fromRGB(35, 35, 40);
+    border = Color3.fromRGB(55, 55, 65);
+    accent = Color3.fromRGB(255, 140, 0);
+    text = Color3.fromRGB(240, 240, 240);
+    shadow = Color3.fromRGB(0, 0, 0);
+};
 
-local movingUpFinished = true
-local movingDownFinished = true
+local TWEEN_INFO = {
+    in_out = TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out);
+    progress = TweenInfo.new(1, Enum.EasingStyle.Linear);
+    slide = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out);
+};
 
-function Notification.new(options)
+function Notification.new(config)
+    local options = type(config) == "table" and config or {text = tostring(config)};
+    
     local self = setmetatable({
-        _options = options
-    }, Notification)
-
-    self._options = options
-    self._maid = Maid.new()
+        _options = {
+            text = options.text or "Notification";
+            duration = options.duration or 4;
+            icon = options.icon;
+            color = options.color or MODERN_COLORS.accent;
+        };
+        _maid = Maid.new();
+        _tweens = {};
+        _destroyed = false;
+    }, Notification);
     
-    self.Destroying = Signal.new()
+    self.Destroying = Signal.new();
+    self._maid:AddTask(self.Destroying);
     
-    self._tweens = {}
-    task.spawn(self._init, self)
+    task.spawn(function() self:_init() end);
+    return self;
+end;
 
-    return self
-end
+function Notification:_createDrawing(type, props)
+    local instance = Drawing.new(type);
+    for k, v in pairs(props) do
+        instance[k] = v;
+    end;
+    self._maid:AddTask(instance);
+    return instance;
+end;
 
-function Notification:_createDrawingInstance(instanceType, properties)
-    local instance = Drawing.new(instanceType)
+function Notification:_getTextBounds(text, size)
+    local temp = Drawing.new('Text');
+    temp.Text = text;
+    temp.Size = size;
+    local bounds = temp.TextBounds;
+    temp:Remove();
+    return bounds;
+end;
 
-    if (properties.Visible == nil) then
-        properties.Visible = true
-    end
-
-    for i, v in next, properties do
-        instance[i] = v
-    end
-
-    return instance
-end
-
-function Notification:_getTextBounds(text, fontSize)
-    local t = Drawing.new('Text')
-    t.Text = text
-    t.Size = fontSize
-
-    local res = t.TextBounds
-    t:Remove()
-    return res.X
-end
-
-function Notification:_tweenProperty(instance, property, value, tweenInfo, dontCancel)
-    local currentValue = instance[property]
-    local valueType = typeof(currentValue)
-    local valueObject = Instance.new(VALUE_NAMES[valueType])
-
-    self._maid:AddTask(valueObject)
+function Notification:_tween(instance, props, info, callback)
+    local tween = TweenService:Create(instance, info or TWEEN_INFO.in_out, props);
+    self._tweens[tween] = true;
     
-    local isVector2 = (valueType == "Vector2")
+    if callback then
+        self._maid:AddTask(tween.Completed:Connect(callback));
+    end;
     
-    if isVector2 then
-        value = Vector3.new(value.X, value.Y, 0)
-        currentValue = Vector3.new(currentValue.X, currentValue.Y, 0)
-    end
-
-    valueObject.Value = currentValue
-    local tween = TweenService:Create(valueObject, tweenInfo, {Value = value})
-
-    self._tweens[tween] = dontCancel or false
-
-    local propertyConnection = valueObject:GetPropertyChangedSignal('Value'):Connect(function()
-        local newValue = valueObject.Value
-
-        if isVector2 then
-            newValue = Vector2.new(newValue.X, newValue.Y)
-        end
-
-        if self._destroyed then return end
-
-        instance[property] = newValue
-    end)
-    
-    self._maid:AddTask(propertyConnection)
-
-    local completedConnection = tween.Completed:Connect(function()
-        valueObject:Destroy()
-        self._tweens[tween] = nil
-    end)
-    
-    self._maid:AddTask(completedConnection)
-
-    tween:Play()
-
-    if (instance == self._progressBar and property == 'Size') then
-        local progressConnection = tween.Completed:Connect(function(playbackState)
-            if (playbackState ~= Enum.PlaybackState.Completed) then return end
-            self:Destroy()
-        end)
-        self._maid:AddTask(progressConnection)
-    end
-
-    return tween
-end
+    self._maid:AddTask(tween);
+    tween:Play();
+    return tween;
+end;
 
 function Notification:_init()
-    self:MoveUp()
+    local textBounds = self:_getTextBounds(self._options.text, 16);
+    local padding = Vector2.new(25, 15);
+    local frameSize = textBounds + padding;
+    
+    if self._options.icon then frameSize += Vector2.new(20, 0) end;
+    
+    local startPos = viewportSize + Vector2.new(10, -frameSize.Y - 10);
+    local endPos = viewportSize - Vector2.new(frameSize.X + 10, frameSize.Y + 10);
+    
+    self._shadow = self:_createDrawing('Square', {
+        Size = frameSize + Vector2.new(4, 4);
+        Position = startPos + Vector2.new(2, 2);
+        Color = MODERN_COLORS.shadow;
+        Transparency = 0.7;
+        Filled = true;
+    });
+    
+    self._frame = self:_createDrawing('Square', {
+        Size = frameSize;
+        Position = startPos;
+        Color = MODERN_COLORS.background;
+        Filled = true;
+    });
+    
+    self._border = self:_createDrawing('Square', {
+        Size = frameSize;
+        Position = startPos;
+        Color = MODERN_COLORS.border;
+        Filled = false;
+        Thickness = 1;
+    });
+    
+    self._accent = self:_createDrawing('Square', {
+        Size = Vector2.new(3, frameSize.Y);
+        Position = startPos;
+        Color = self._options.color;
+        Filled = true;
+    });
+    
+    local textX = self._options.icon and 35 or 15;
+    self._text = self:_createDrawing('Text', {
+        Text = self._options.text;
+        Size = 16;
+        Color = MODERN_COLORS.text;
+        Position = startPos + Vector2.new(textX, frameSize.Y / 2 - textBounds.Y / 2);
+        Font = Drawing.Fonts.Plex;
+    });
+    
+    if self._options.icon then
+        self._icon = self:_createDrawing('Text', {
+            Text = self._options.icon;
+            Size = 18;
+            Color = self._options.color;
+            Position = startPos + Vector2.new(12, frameSize.Y / 2 - 9);
+            Font = Drawing.Fonts.Plex;
+        });
+    end;
+    
+    if self._options.duration then
+        self._progress = self:_createDrawing('Square', {
+            Size = Vector2.new(frameSize.X, 2);
+            Position = startPos + Vector2.new(0, frameSize.Y - 2);
+            Color = self._options.color;
+            Filled = true;
+        });
+    end;
+    
+    table.insert(notifications, self);
+    self:_moveAllUp();
+    
+    local targetPos = endPos - Vector2.new(0, (#notifications - 1) * Notification.NotifGap);
+    
+    self:_tween(self._shadow, {Position = targetPos + Vector2.new(2, 2)}, TWEEN_INFO.slide);
+    self:_tween(self._frame, {Position = targetPos}, TWEEN_INFO.slide);
+    self:_tween(self._border, {Position = targetPos}, TWEEN_INFO.slide);
+    self:_tween(self._accent, {Position = targetPos}, TWEEN_INFO.slide);
+    
+    local textPos = targetPos + Vector2.new(textX, frameSize.Y / 2 - textBounds.Y / 2);
+    self:_tween(self._text, {Position = textPos}, TWEEN_INFO.slide);
+    
+    if self._icon then
+        local iconPos = targetPos + Vector2.new(12, frameSize.Y / 2 - 9);
+        self:_tween(self._icon, {Position = iconPos}, TWEEN_INFO.slide);
+    end;
+    
+    if self._progress then
+        local progressPos = targetPos + Vector2.new(0, frameSize.Y - 2);
+        self:_tween(self._progress, {Position = progressPos}, TWEEN_INFO.slide, function()
+            self:_tween(self._progress, {Size = Vector2.new(0, 2)}, 
+                TweenInfo.new(self._options.duration, Enum.EasingStyle.Linear), 
+                function() self:Destroy() end);
+        end);
+    end;
+end;
 
-    local textSize = Vector2.new(self:_getTextBounds(self._options.text, 19), 30)
-    textSize += Vector2.new(10, 0) -- Padding
+function Notification:_moveAllUp()
+    if isMoving then return end;
+    isMoving = true;
+    
+    local moveDistance = Vector2.new(0, -Notification.NotifGap);
+    
+    for i, notif in ipairs(notifications) do
+        if notif ~= self and not notif._destroyed then
+            notif:_cancelTweens();
+            
+            local elements = {notif._shadow, notif._frame, notif._border, notif._accent, notif._text};
+            if notif._icon then table.insert(elements, notif._icon) end;
+            if notif._progress then table.insert(elements, notif._progress) end;
+            
+            for _, element in ipairs(elements) do
+                element.Position = element.Position + moveDistance;
+            end;
+        end;
+    end;
+    
+    task.wait(0.01);
+    isMoving = false;
+end;
 
-    self._textSize = textSize
+function Notification:_cancelTweens()
+    for tween in pairs(self._tweens) do
+        if tween.PlaybackState == Enum.PlaybackState.Playing then
+            tween:Cancel();
+        end;
+    end;
+end;
 
-    self._frame = self:_createDrawingInstance('Square', {
-        Size = textSize,
-        Position = viewportSize - Vector2.new(-10, textSize.Y+10),
-        Color = Color3.fromRGB(12, 12, 12),
-        Filled = true
-    })
-
-    self._originalPosition = self._frame.Position
-
-    self._text = self:_createDrawingInstance('Text', {
-        Text = self._options.text,
-        Center = true,
-        Color = Color3.fromRGB(255, 255, 255),
-        Position = self._frame.Position + Vector2.new(textSize.X/2, 5), -- 5 Cuz of the padding
-        Size = 19
-    })
-
-    self._progressBar = self:_createDrawingInstance('Square', {
-        Size = Vector2.new(textSize.X, 3),
-        Color = Color3.fromRGB(86, 180, 211),
-        Filled = true,
-        Position = self._frame.Position+Vector2.new(0, self._frame.Size.Y-3)
-    })
-
-    table.insert(Notifications, self) --Insert it into the table we are using to move up
-
-    self._startTime = tick()
-    local framePos = viewportSize - textSize - Vector2.new(10, 10)
-
-    self:_tweenProperty(self._frame, 'Position', framePos, TWEEN_INFO, true)
-    self:_tweenProperty(self._text, 'Position', framePos + Vector2.new(textSize.X/2, 5), TWEEN_INFO, true)
-    local t = self:_tweenProperty(self._progressBar, 'Position', framePos + Vector2.new(0, self._frame.Size.Y-3), TWEEN_INFO, true) --We dont really want this to be cancelable
-
-    self._maid._progressConnection = t.Completed:Connect(function() --This should prob use maids lol
-        if (self._options.duration) then
-            self:_tweenProperty(self._progressBar, 'Size', Vector2.new(0, 3), TweenInfo.new(self._options.duration, Enum.EasingStyle.Linear))
-            self:_tweenProperty(self._progressBar, 'Position', framePos - Vector2.new(-self._frame.Size.X, -(self._frame.Size.Y-3)), TweenInfo.new(self._options.duration, Enum.EasingStyle.Linear)) --You should technically remove this after its complete but doesn't matter
-        end
-    end)
-end
-
-function Notification:MouseInFrame()
-    local mousePos = UserInputService:GetMouseLocation()
-    local framePos = self._frame.Position
-    local bottomRight = framePos + self._frame.Size
-
-    return (mousePos.X >= framePos.X and mousePos.X <= bottomRight.X) and (mousePos.Y >= framePos.Y and mousePos.Y <= bottomRight.Y)
-end
-
-function Notification:GetHovered()
-    for _, notif in next, Notifications do
-        if notif:MouseInFrame() then return notif end
-    end
-
-    return nil
-end
-
-function Notification:MoveUp() --Going to use this to move all the drawing instances up one
-    if (self._destroyed) then return end
-
-    repeat task.wait() until movingUpFinished
-
-    movingUpFinished = false
-
-    local distanceUp = Vector2.new(0, -self.NotifGap) --This can be made dynamic but I'm not sure if youd rather use screen size or an argument up to you
-
-    for i, v in next, Notifications do
-        --I mean you can obviously use le tween to make it cleaner
-        v:CancelTweens() --Cancel all current tweens that arent the default
-
-        local newFramePos = v._frame.Position + distanceUp
-
-        v._frame.Position = newFramePos
-        v._text.Position = v._text.Position + distanceUp
-        v._progressBar.Position = v._progressBar.Position + distanceUp
-
-        if (not v._options.duration) then continue end
-
-        local newDuration = v._options.duration - (tick() - v._startTime)
-
-        v:_tweenProperty(v._progressBar, 'Size', Vector2.new(0, 3), TweenInfo.new(newDuration, Enum.EasingStyle.Linear))
-        v:_tweenProperty(v._progressBar, 'Position', newFramePos - Vector2.new(-v._frame.Size.X, -(v._frame.Size.Y-3)), TweenInfo.new(newDuration, Enum.EasingStyle.Linear))
-    end
-    movingUpFinished = true
-end
-
-function Notification:MoveDown() --Going to use this to move all the drawing instances up one
-    if (self._destroyed) then return end
-
-    repeat task.wait() until movingDownFinished
-
-    movingDownFinished = false
-
-    local distanceDown = Vector2.new(0, self.NotifGap) --This can be made dynamic but I'm not sure if youd rather use screen size or an argument up to you
-
-    local index = table.find(Notifications, self) or 1
-
-    for i = index, 1, -1 do
-        local v = Notifications[i]
-
-        v:CancelTweens() --Cancel all current tweens that arent the default
-
-        local newFramePos = v._frame.Position + distanceDown
-
-        v._frame.Position = newFramePos
-        v._text.Position = v._text.Position + distanceDown
-        v._progressBar.Position = v._progressBar.Position + distanceDown
-
-        if (not v._options.duration) then continue end
-
-        v._startTime = v._startTime or tick()
-        local newDuration = v._options.duration - (tick() - v._startTime)
-
-        v:_tweenProperty(v._progressBar, 'Size', Vector2.new(0, 3), TweenInfo.new(newDuration, Enum.EasingStyle.Linear))
-        v:_tweenProperty(v._progressBar, 'Position', newFramePos - Vector2.new(-v._frame.Size.X, -(v._frame.Size.Y-3)), TweenInfo.new(newDuration, Enum.EasingStyle.Linear))
-    end
-    movingDownFinished = true
-end
-
-function Notification:CancelTweens()
-    for tween, cancelInfo in next, self._tweens do
-        if cancelInfo then
-            self._maid._progressConnection = nil
-            tween.Completed:Wait()
-            continue
-        end
-        tween:Cancel()
-    end
-end
-
-function Notification:ClearAllAbove()
-    local index = table.find(Notifications, self)
-
-    for i = 1, index do
-        task.spawn(function()
-            Notifications[i]:Destroy()
-        end)
-    end
-end
-
-function Notification:Remove()
-    table.remove(Notifications, table.find(Notifications, self)) --We kind of want to use this and kind of don't its causing ALOT of issues with a large amount of things, but it also fixes the order issue gl
-end
+function Notification:_mouseInFrame()
+    local mouse = UserInputService:GetMouseLocation();
+    local pos = self._frame.Position;
+    local size = self._frame.Size;
+    return mouse.X >= pos.X and mouse.X <= pos.X + size.X and 
+           mouse.Y >= pos.Y and mouse.Y <= pos.Y + size.Y;
+end;
 
 function Notification:Destroy()
-    -- TODO: Use a maid in the future
-    if (self._destroyFixed) then return end
-    self._destroyFixed = true
-
-    self.Destroying:Fire()
-
-    local framePos = self._originalPosition
-    local textSize = self._textSize
-
-    self:CancelTweens()
-
-    self:_tweenProperty(self._frame, 'Position', framePos, TWEEN_INFO, true)
-    self:_tweenProperty(self._text, 'Position', framePos + Vector2.new(textSize.X/2, 5), TWEEN_INFO, true)
-    self:_tweenProperty(self._progressBar, 'Position', framePos + Vector2.new(0, self._frame.Size.Y-3), TWEEN_INFO, true).Completed:Wait()
-
-    self:MoveDown()
-
-    self:Remove()
-
-    self._destroyed = true
-
-    self._frame:Remove()
-    self._text:Remove()
-    self._progressBar:Remove()
+    if self._destroyed then return end;
+    self._destroyed = true;
     
-    self._maid:Clean()
-end
+    self.Destroying:Fire();
+    
+    local index = table.find(notifications, self);
+    if index then table.remove(notifications, index) end;
+    
+    self:_cancelTweens();
+    
+    local slideOut = viewportSize + Vector2.new(10, 0);
+    self:_tween(self._frame, {Position = slideOut}, TWEEN_INFO.in_out, function()
+        self._maid:Clean();
+    end);
+    
+    if self._shadow then self:_tween(self._shadow, {Position = slideOut + Vector2.new(2, 2)}); end;
+    if self._border then self:_tween(self._border, {Position = slideOut}); end;
+    if self._accent then self:_tween(self._accent, {Position = slideOut}); end;
+    if self._text then self:_tween(self._text, {Position = slideOut + Vector2.new(15, 10)}); end;
+    if self._icon then self:_tween(self._icon, {Position = slideOut + Vector2.new(12, 10)}); end;
+    if self._progress then self:_tween(self._progress, {Position = slideOut + Vector2.new(0, 20)}); end;
+    
+    task.wait(0.1);
+    self:_moveAllUp();
+end;
 
-local function onInputBegan(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then 
-        local notif = Notification:GetHovered()
-        if notif then
-            notif:Destroy()
-        end
-    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then 
-        local notif = Notification:GetHovered()
-        if notif then
-            notif:ClearAllAbove()
-        end
-    end
-end
+local function onInput(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        for _, notif in ipairs(notifications) do
+            if notif:_mouseInFrame() then
+                notif:Destroy();
+                break;
+            end;
+        end;
+    end;
+end;
 
-UserInputService.InputBegan:Connect(onInputBegan)
-return Notification
+UserInputService.InputBegan:Connect(onInput);
+
+return setmetatable({
+    new = Notification.new;
+    create = Notification.new;
+}, {
+    __call = function(_, ...)
+        return Notification.new(...);
+    end;
+});
