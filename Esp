@@ -316,25 +316,27 @@ function EspObject:Render()
 		healthBarOutline.Transparency = options.healthBarOutlineColor[2];
 	end
 
-	visible.healthText.Visible = enabled and onScreen and options.healthText;
-	if visible.healthText.Visible then
-		local barFrom = corners.topLeft - HEALTH_BAR_OFFSET;
-		local barTo = corners.bottomLeft - HEALTH_BAR_OFFSET;
-
-		local healthText = visible.healthText;
-		healthText.Text = round(self.health) .. "hp";
-		healthText.Size = interface.sharedSettings.textSize;
-		healthText.Font = interface.sharedSettings.textFont;
-		healthText.Color = options.healthTextColor[1];
-		healthText.Transparency = options.healthTextColor[2];
-		healthText.Outline = options.healthTextOutline;
-		healthText.OutlineColor = options.healthTextOutlineColor;
-		local healthRatio = 0;
-		if self.health and self.maxHealth and self.maxHealth > 0 then
-		    healthRatio = math.max(0, math.min(1, self.health / self.maxHealth));
-		end;
-		healthText.Position = lerp2(barTo, barFrom, healthRatio) - Vector2.new(healthText.TextBounds.X/2, healthText.TextBounds.Y/2) - HEALTH_TEXT_OFFSET;
-	end
+    visible.healthText.Visible = not not (enabled and onScreen and options.healthText and self.health);
+    if visible.healthText.Visible then
+        local barFrom = corners.topLeft - HEALTH_BAR_OFFSET;
+        local barTo = corners.bottomLeft - HEALTH_BAR_OFFSET;
+        
+        local healthText = visible.healthText;
+        healthText.Text = round(self.health) .. "hp";
+        healthText.Size = interface.sharedSettings.textSize;
+        healthText.Font = interface.sharedSettings.textFont;
+        healthText.Color = options.healthTextColor[1];
+        healthText.Transparency = options.healthTextColor[2];
+        healthText.Outline = options.healthTextOutline;
+        healthText.OutlineColor = options.healthTextOutlineColor;
+        
+        local healthRatio = 0;
+        if self.health and self.maxHealth and self.maxHealth > 0 then
+            healthRatio = math.max(0, math.min(1, self.health / self.maxHealth));
+        end;
+        
+        healthText.Position = lerp2(barTo, barFrom, healthRatio) - healthText.TextBounds*0.5 - HEALTH_TEXT_OFFSET;
+    end;
 
 	visible.name.Visible = enabled and onScreen and options.name;
 	if visible.name.Visible then
@@ -558,34 +560,36 @@ function InstanceEspObject:create(class, properties)
 end
 
 function InstanceEspObject:Destruct()
-	if self.drawings then
-		for _, drawings in pairs(self.drawings) do
-			if type(drawings) == "table" then
-				for _, drawing in pairs(drawings) do
-					if type(drawing) == "table" then
-						for _, line in pairs(drawing) do
-							if line.Visible ~= nil then
-								line.Visible = false;
-							end
-						end
-					elseif drawing.Visible ~= nil then
-						drawing.Visible = false;
-					end
-				end
-			end
-		end
-	end
-	
-	if self.interface and self.interface._instanceCache then
-		local cache = self.interface._instanceCache;
-		if cache[self.instance] then
-			cache[self.instance] = nil;
-		end
-	end
-	
-	self.maid:Cleanup();
-	clear(self);
- end
+    if self.drawings then
+        for _, drawings in pairs(self.drawings) do
+            if type(drawings) == "table" then
+                for _, drawing in pairs(drawings) do
+                    if type(drawing) == "table" then
+                        for _, line in pairs(drawing) do
+                            if line and line.Visible ~= nil then
+                                line.Visible = false;
+                            end
+                        end
+                    elseif drawing and drawing.Visible ~= nil then
+                        drawing.Visible = false;
+                    end
+                end
+            end
+        end
+    end
+    
+    if self.interface and self.interface._instanceCache then
+        local cache = self.interface._instanceCache;
+        if cache[self.instance] then
+            cache[self.instance] = nil;
+        end
+    end
+    
+    if self.maid then
+        self.maid:Cleanup();
+    end;
+    clear(self);
+end;
 
 function InstanceEspObject:Update()
 	if not self.instance or not self.instance.Parent then
@@ -642,26 +646,17 @@ function InstanceEspObject:Update()
 		self.direction = Vector2.new(cos(angle), sin(angle));
 	end
 	
-    if self.interface.getHealth then
-        self.health, self.maxHealth = self.interface.getHealth(self.instance);
-    else
-        local humanoid = self.instance:FindFirstChildOfClass("Humanoid");
-        if humanoid then
-            self.health = humanoid.Health;
-            self.maxHealth = humanoid.MaxHealth;
-        else
-            self.health = 100;
-            self.maxHealth = 100;
-        end
-    end
-end 
-
-function InstanceObject:UpdateSettings(newOptions)
-	for key, value in pairs(newOptions) do
-		self.options[key] = value;
+	-- Update health if available
+	local humanoid = self.instance:FindFirstChildOfClass("Humanoid");
+	if humanoid then
+		self.health = humanoid.Health;
+		self.maxHealth = humanoid.MaxHealth;
+	else
+		self.health = 100;
+		self.maxHealth = 100;
 	end
- end
- 
+end
+
 function InstanceEspObject:Render()
 	if not self.drawings or not self.drawings.visible then
 		return;
@@ -744,8 +739,8 @@ function InstanceEspObject:Render()
 		end
 	end
 	
-    visible.healthText.Visible = enabled and onScreen and options.healthText and self.health ~= nil;
-	if visible.healthText.Visible then
+    visible.healthText.Visible = not not (enabled and onScreen and options.healthText and self.health);
+    	if visible.healthText.Visible then
 		local barFrom = corners.topLeft - HEALTH_BAR_OFFSET;
 		local barTo = corners.bottomLeft - HEALTH_BAR_OFFSET;
 		
@@ -1118,6 +1113,26 @@ local EspInterface = {
 	}
 };
 
+function EspInterface.UpdateInstanceSettings(instance, newOptions)
+    local cache = EspInterface._instanceCache;
+    local object = cache[instance];
+    if object and object.UpdateSettings then
+        object:UpdateSettings(newOptions);
+        return true;
+    end;
+    return false;
+end;
+
+function EspInterface.UpdateInstanceSettings(instance, newOptions)
+    local cache = EspInterface._instanceCache;
+    local object = cache[instance];
+    if object and object.UpdateSettings then
+        object:UpdateSettings(newOptions);
+        return true;
+    end;
+    return false;
+end;
+
 function EspInterface.AddInstanceEsp(instance, customOptions)
 	if not instance or not instance.Parent then
 		warn("Cannot add ESP to invalid instance");
@@ -1133,7 +1148,6 @@ function EspInterface.AddInstanceEsp(instance, customOptions)
 	cache[instance] = InstanceEspObject.new(instance, EspInterface, customOptions);
 	return cache[instance];
 end
-
 
 function EspInterface.AddInstance(instance, options)
 	if not instance or not instance.Parent then
@@ -1350,4 +1364,5 @@ function EspInterface.SetupNpcEsp(options)
 	
 	return npcOptions;
 end]]
+
 return EspInterface;
