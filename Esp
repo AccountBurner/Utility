@@ -598,12 +598,20 @@ function InstanceEspObject:Update()
 	local interface = self.interface;
 	local options = interface.instanceSettings or interface.teamSettings.enemy;
 	
-	-- Override with custom options
 	for key, value in pairs(self.customOptions) do
 		options[key] = value;
 	end
 	
-	self.options = options;
+	if not self.options then
+        local options = interface.instanceSettings or interface.teamSettings.enemy;
+        
+        for key, value in pairs(self.customOptions) do
+            options[key] = value;
+        end
+        
+        self.options = options;
+    end
+	
 	self.enabled = options.enabled;
 	
 	local primaryPart = self.instance:FindFirstChild("HumanoidRootPart") or self.instance:FindFirstChild("Primary") or self.instance:FindFirstChildOfClass("BasePart");
@@ -860,10 +868,17 @@ function InstanceEspObject:Render()
 end
 
 function InstanceEspObject:UpdateSettings(newSettings)
+    self.options = self.options or {}
+    self.customOptions = self.customOptions or {}
+    
     for key, value in pairs(newSettings) do
         self.options[key] = value;
+        self.customOptions[key] = value;  -- Update both
     end
+    
+    self.enabled = self.options.enabled
 end
+
 local InstanceObject = {};
 InstanceObject.__index = InstanceObject;
 
