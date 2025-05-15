@@ -76,9 +76,43 @@ function Notification:_getTextBounds(text, size)
     return bounds;
 end;
 
-function Notification:_tween(instance, props, info, callback)
-    local tween = TweenService:Create(instance, info or TWEEN_INFO.in_out, props);
+-- Fixed tween method using custom property tweening for Drawing objects
+function Notification:_tweenProperty(instance, property, target, info, callback)
+    local currentValue = instance[property];
+    local valueType = typeof(currentValue);
+    
+    -- Create appropriate value object
+    local valueObject = Instance.new(
+        valueType == "Vector2" and "Vector3Value" or
+        valueType == "Color3" and "Color3Value" or
+        "NumberValue"
+    );
+    
+    self._maid:AddTask(valueObject);
+    
+    -- Handle Vector2 conversion
+    if valueType == "Vector2" then
+        valueObject.Value = Vector3.new(currentValue.X, currentValue.Y, 0);
+        target = Vector3.new(target.X, target.Y, 0);
+    else
+        valueObject.Value = currentValue;
+    end;
+    
+    local tween = TweenService:Create(valueObject, info, {Value = target});
     self._tweens[tween] = true;
+    
+    local connection = valueObject:GetPropertyChangedSignal('Value'):Connect(function()
+        if self._destroyed then return end;
+        
+        local newValue = valueObject.Value;
+        if valueType == "Vector2" then
+            newValue = Vector2.new(newValue.X, newValue.Y);
+        end;
+        
+        instance[property] = newValue;
+    end);
+    
+    self._maid:AddTask(connection);
     
     if callback then
         self._maid:AddTask(tween.Completed:Connect(callback));
@@ -99,6 +133,7 @@ function Notification:_init()
     local startPos = viewportSize + Vector2.new(10, -frameSize.Y - 10);
     local endPos = viewportSize - Vector2.new(frameSize.X + 10, frameSize.Y + 10);
     
+    -- Create UI elements
     self._shadow = self:_createDrawing('Square', {
         Size = frameSize + Vector2.new(4, 4);
         Position = startPos + Vector2.new(2, 2);
@@ -135,7 +170,7 @@ function Notification:_init()
         Size = 16;
         Color = MODERN_COLORS.text;
         Position = startPos + Vector2.new(textX, frameSize.Y / 2 - textBounds.Y / 2);
-        Font = Drawing.Fonts.Plex;
+        Font = Drawing.Fonts.UI;
     });
     
     if self._options.icon then
@@ -144,7 +179,7 @@ function Notification:_init()
             Size = 18;
             Color = self._options.color;
             Position = startPos + Vector2.new(12, frameSize.Y / 2 - 9);
-            Font = Drawing.Fonts.Plex;
+            Font = Drawing.Fonts.UI;
         });
     end;
     
@@ -157,28 +192,31 @@ function Notification:_init()
         });
     end;
     
+    -- Add to notifications list and move others up
     table.insert(notifications, self);
     self:_moveAllUp();
     
+    -- Calculate target position
     local targetPos = endPos - Vector2.new(0, (#notifications - 1) * Notification.NotifGap);
     
-    self:_tween(self._shadow, {Position = targetPos + Vector2.new(2, 2)}, TWEEN_INFO.slide);
-    self:_tween(self._frame, {Position = targetPos}, TWEEN_INFO.slide);
-    self:_tween(self._border, {Position = targetPos}, TWEEN_INFO.slide);
-    self:_tween(self._accent, {Position = targetPos}, TWEEN_INFO.slide);
+    -- Animate in
+    self:_tweenProperty(self._shadow, 'Position', targetPos + Vector2.new(2, 2), TWEEN_INFO.slide);
+    self:_tweenProperty(self._frame, 'Position', targetPos, TWEEN_INFO.slide);
+    self:_tweenProperty(self._border, 'Position', targetPos, TWEEN_INFO.slide);
+    self:_tweenProperty(self._accent, 'Position', targetPos, TWEEN_INFO.slide);
     
     local textPos = targetPos + Vector2.new(textX, frameSize.Y / 2 - textBounds.Y / 2);
-    self:_tween(self._text, {Position = textPos}, TWEEN_INFO.slide);
+    self:_tweenProperty(self._text, 'Position', textPos, TWEEN_INFO.slide);
     
     if self._icon then
         local iconPos = targetPos + Vector2.new(12, frameSize.Y / 2 - 9);
-        self:_tween(self._icon, {Position = iconPos}, TWEEN_INFO.slide);
+        self:_tweenProperty(self._icon, 'Position', iconPos, TWEEN_INFO.slide);
     end;
     
     if self._progress then
         local progressPos = targetPos + Vector2.new(0, frameSize.Y - 2);
-        self:_tween(self._progress, {Position = progressPos}, TWEEN_INFO.slide, function()
-            self:_tween(self._progress, {Size = Vector2.new(0, 2)}, 
+        self:_tweenProperty(self._progress, 'Position', progressPos, TWEEN_INFO.slide, function()
+            self:_tweenProperty(self._progress, 'Size', Vector2.new(0, 2), 
                 TweenInfo.new(self._options.duration, Enum.EasingStyle.Linear), 
                 function() self:Destroy() end);
         end);
@@ -200,7 +238,9 @@ function Notification:_moveAllUp()
             if notif._progress then table.insert(elements, notif._progress) end;
             
             for _, element in ipairs(elements) do
-                element.Position = element.Position + moveDistance;
+                if element then
+                    element.Position = element.Position + moveDistance;
+                end;
             end;
         end;
     end;
@@ -237,16 +277,16 @@ function Notification:Destroy()
     self:_cancelTweens();
     
     local slideOut = viewportSize + Vector2.new(10, 0);
-    self:_tween(self._frame, {Position = slideOut}, TWEEN_INFO.in_out, function()
+    self:_tweenProperty(self._frame, 'Position', slideOut, TWEEN_INFO.in_out, function()
         self._maid:Clean();
     end);
     
-    if self._shadow then self:_tween(self._shadow, {Position = slideOut + Vector2.new(2, 2)}); end;
-    if self._border then self:_tween(self._border, {Position = slideOut}); end;
-    if self._accent then self:_tween(self._accent, {Position = slideOut}); end;
-    if self._text then self:_tween(self._text, {Position = slideOut + Vector2.new(15, 10)}); end;
-    if self._icon then self:_tween(self._icon, {Position = slideOut + Vector2.new(12, 10)}); end;
-    if self._progress then self:_tween(self._progress, {Position = slideOut + Vector2.new(0, 20)}); end;
+    if self._shadow then self:_tweenProperty(self._shadow, 'Position', slideOut + Vector2.new(2, 2)); end;
+    if self._border then self:_tweenProperty(self._border, 'Position', slideOut); end;
+    if self._accent then self:_tweenProperty(self._accent, 'Position', slideOut); end;
+    if self._text then self:_tweenProperty(self._text, 'Position', slideOut + Vector2.new(15, 10)); end;
+    if self._icon then self:_tweenProperty(self._icon, 'Position', slideOut + Vector2.new(12, 10)); end;
+    if self._progress then self:_tweenProperty(self._progress, 'Position', slideOut + Vector2.new(0, 20)); end;
     
     task.wait(0.1);
     self:_moveAllUp();
