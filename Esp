@@ -11,8 +11,7 @@ local workspace = game:GetService("Workspace");
 local localPlayer = players.LocalPlayer;
 local camera = workspace.CurrentCamera;
 local viewportSize = camera.ViewportSize;
-local container = Instance.new("Folder",
-	gethui and gethui() or game:GetService("CoreGui"));
+local container = gethui and gethui() or game:GetService("CoreGui");
 
 -- locals
 local floor = math.floor;
@@ -860,6 +859,11 @@ function InstanceEspObject:Render()
 	end
 end
 
+function InstanceEspObject:UpdateSettings(newSettings)
+    for key, value in pairs(newSettings) do
+        self.options[key] = value;
+    end
+end
 local InstanceObject = {};
 InstanceObject.__index = InstanceObject;
 
@@ -951,6 +955,13 @@ function InstanceObject:Render()
 			:gsub("{distance}", round(depth))
 			:gsub("{position}", tostring(world));
 	end
+end
+
+function InstanceEspObject:UpdateSettings(newSettings)
+    for key, value in pairs(newSettings) do
+        self.options[key] = value;
+    end
+    self.enabled = self.options.enabled;
 end
 
 -- interface
@@ -1123,16 +1134,6 @@ function EspInterface.UpdateInstanceSettings(instance, newOptions)
     return false;
 end;
 
-function EspInterface.UpdateInstanceSettings(instance, newOptions)
-    local cache = EspInterface._instanceCache;
-    local object = cache[instance];
-    if object and object.UpdateSettings then
-        object:UpdateSettings(newOptions);
-        return true;
-    end;
-    return false;
-end;
-
 function EspInterface.AddInstanceEsp(instance, customOptions)
 	if not instance or not instance.Parent then
 		warn("Cannot add ESP to invalid instance");
@@ -1165,7 +1166,6 @@ function EspInterface.AddInstance(instance, options)
 	return cache[instance];
 end
 
--- Remove instance ESP
 function EspInterface.RemoveInstance(instance)
 	local cache = EspInterface._instanceCache;
 	local object = cache[instance];
@@ -1177,7 +1177,6 @@ function EspInterface.RemoveInstance(instance)
 	return false;
 end
 
--- Clean up invalid instances
 function EspInterface.CleanupInstances()
 	local cache = EspInterface._instanceCache;
 	local toRemove = {};
@@ -1196,7 +1195,6 @@ function EspInterface.CleanupInstances()
 	return #toRemove;
 end
 
--- Add multiple instances with same options
 function EspInterface.AddInstances(instances, customOptions)
 	local objects = {};
 	for i, instance in pairs(instances) do
@@ -1364,5 +1362,4 @@ function EspInterface.SetupNpcEsp(options)
 	
 	return npcOptions;
 end]]
-
 return EspInterface;
