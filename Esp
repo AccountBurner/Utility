@@ -656,7 +656,12 @@ function InstanceEspObject:Update()
     end
 end 
 
-
+function InstanceObject:UpdateSettings(newOptions)
+	for key, value in pairs(newOptions) do
+		self.options[key] = value;
+	end
+ end
+ 
 function InstanceEspObject:Render()
 	if not self.drawings or not self.drawings.visible then
 		return;
