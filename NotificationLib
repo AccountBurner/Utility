@@ -331,4 +331,4 @@ local Notifications = NotificationSystem.new()
 NotificationSystem:Info("Information", "This is an informational message")
 NotificationSystem:Warning("Warning", "This action may cause issues")
 NotificationSystem:Error("Error", "Something went wrong")]]
-]]
+
