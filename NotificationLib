@@ -1,0 +1,338 @@
+if not LPH_OBFUSCATED then
+    LPH_NO_VIRTUALIZE = function(f) return f end;
+    LPH_JIT = function(f) return f end;
+    LPH_CRASH = function() while true do end end;
+end;
+
+for _, c in next, getconnections(game:GetService("ScriptContext").Error) do
+    c:Disable();
+end;
+
+local MaidSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Maid.lua");
+local SignalSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Signal");
+local ServicesSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Services");
+
+local Maid = loadstring(MaidSource)();
+local Signal = loadstring(SignalSource)();
+local Services = loadstring(ServicesSource)();
+
+local TweenService, CoreGui, UserInputService, GuiService = Services:Get('TweenService', 'CoreGui', 'UserInputService', 'GuiService');
+
+local NotificationSystem = {};
+NotificationSystem.__index = NotificationSystem;
+
+local NOTIFICATION_PADDING = 10;
+local NOTIFICATION_GAP = 5;
+local NOTIFICATION_DURATION = 5;
+local NOTIFICATION_WIDTH = 300;
+local NOTIFICATION_HEIGHT = 80;
+local NOTIFICATION_CORNER_RADIUS = 4;
+local TWEEN_INFO = TweenInfo.new(0.3, Enum.EasingStyle.Quint);
+local PROGRESS_TWEEN_INFO = TweenInfo.new(NOTIFICATION_DURATION, Enum.EasingStyle.Linear);
+
+local THEME = {
+    Background = Color3.fromRGB(30, 30, 30),
+    Text = Color3.fromRGB(255, 255, 255),
+    SubText = Color3.fromRGB(180, 180, 180),
+    
+    Types = {
+        Info = {
+            Color = Color3.fromRGB(78, 131, 255),
+            Icon = "rbxassetid://7733658504"
+        },
+        Success = {
+            Color = Color3.fromRGB(85, 170, 127),
+            Icon = "rbxassetid://7733658516"
+        },
+        Warning = {
+            Color = Color3.fromRGB(245, 179, 66),
+            Icon = "rbxassetid://7733786975"
+        },
+        Error = {
+            Color = Color3.fromRGB(235, 87, 87),
+            Icon = "rbxassetid://7733658524"
+        }
+    }
+};
+
+local ActiveNotifications = {};
+
+local Container = Instance.new("ScreenGui");
+Container.Name = "ModernNotifications";
+Container.ResetOnSpawn = false;
+Container.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
+
+local function setParent(instance)
+    if syn and syn.protect_gui then
+        syn.protect_gui(instance);
+        instance.Parent = CoreGui;
+    elseif gethui then
+        instance.Parent = gethui();
+    else
+        instance.Parent = CoreGui;
+    end
+end;
+
+setParent(Container);
+
+local Notification = {};
+Notification.__index = Notification;
+
+function Notification.new(options)
+    local self = setmetatable({}, Notification);
+    
+    self.Type = options.Type or "Info";
+    self.Title = options.Title or "Notification";
+    self.Text = options.Text or "";
+    self.Duration = options.Duration or NOTIFICATION_DURATION;
+    self.Callback = options.Callback;
+    
+    self.Destroying = Signal.new();
+    self._maid = Maid.new();
+    
+    self:_init();
+    
+    return self;
+end;
+
+function Notification:GetScreenSize()
+    local viewport = workspace.CurrentCamera.ViewportSize;
+    local insets = GuiService:GetGuiInset();
+    return viewport.X, viewport.Y - insets.Y;
+end;
+
+function Notification:GetScaledSize()
+    local screenWidth, screenHeight = self:GetScreenSize();
+    local scale = math.min(screenWidth / 1920, 1);
+    
+    local width = math.min(NOTIFICATION_WIDTH * scale, screenWidth * 0.9);
+    local height = NOTIFICATION_HEIGHT * scale;
+    
+    return width, height;
+end;
+
+function Notification:_init()
+    local typeInfo = THEME.Types[self.Type];
+    local width, height = self:GetScaledSize();
+    local screenWidth, screenHeight = self:GetScreenSize();
+    
+    self.Frame = Instance.new("Frame");
+    self.Frame.Name = "Notification";
+    self.Frame.Size = UDim2.new(0, width, 0, height);
+    self.Frame.Position = UDim2.new(0, NOTIFICATION_PADDING, 1, NOTIFICATION_PADDING);
+    self.Frame.BackgroundColor3 = THEME.Background;
+    self.Frame.BorderSizePixel = 0;
+    self.Frame.AnchorPoint = Vector2.new(0, 1);
+    self.Frame.Parent = Container;
+    
+    local corner = Instance.new("UICorner");
+    corner.CornerRadius = UDim.new(0, NOTIFICATION_CORNER_RADIUS);
+    corner.Parent = self.Frame;
+    
+    self.Icon = Instance.new("ImageLabel");
+    self.Icon.Name = "Icon";
+    self.Icon.Size = UDim2.new(0, 24 * (height/NOTIFICATION_HEIGHT), 0, 24 * (height/NOTIFICATION_HEIGHT));
+    self.Icon.Position = UDim2.new(0, 16 * (width/NOTIFICATION_WIDTH), 0.5, 0);
+    self.Icon.AnchorPoint = Vector2.new(0, 0.5);
+    self.Icon.BackgroundTransparency = 1;
+    self.Icon.Image = typeInfo.Icon;
+    self.Icon.ImageColor3 = typeInfo.Color;
+    self.Icon.Parent = self.Frame;
+    
+    local iconSize = self.Icon.Size.X.Offset;
+    
+    self.TitleLabel = Instance.new("TextLabel");
+    self.TitleLabel.Name = "Title";
+    self.TitleLabel.Size = UDim2.new(1, -iconSize - 50, 0, 20 * (height/NOTIFICATION_HEIGHT));
+    self.TitleLabel.Position = UDim2.new(0, iconSize + 30, 0, 16 * (height/NOTIFICATION_HEIGHT));
+    self.TitleLabel.BackgroundTransparency = 1;
+    self.TitleLabel.Text = self.Title;
+    self.TitleLabel.Font = Enum.Font.GothamBold;
+    self.TitleLabel.TextSize = 14 * (height/NOTIFICATION_HEIGHT);
+    self.TitleLabel.TextColor3 = THEME.Text;
+    self.TitleLabel.TextXAlignment = Enum.TextXAlignment.Left;
+    self.TitleLabel.Parent = self.Frame;
+    
+    self.TextLabel = Instance.new("TextLabel");
+    self.TextLabel.Name = "Message";
+    self.TextLabel.Size = UDim2.new(1, -iconSize - 50, 0, 30 * (height/NOTIFICATION_HEIGHT));
+    self.TextLabel.Position = UDim2.new(0, iconSize + 30, 0, 36 * (height/NOTIFICATION_HEIGHT));
+    self.TextLabel.BackgroundTransparency = 1;
+    self.TextLabel.Text = self.Text;
+    self.TextLabel.Font = Enum.Font.Gotham;
+    self.TextLabel.TextSize = 14 * (height/NOTIFICATION_HEIGHT);
+    self.TextLabel.TextColor3 = THEME.SubText;
+    self.TextLabel.TextXAlignment = Enum.TextXAlignment.Left;
+    self.TextLabel.TextWrapped = true;
+    self.TextLabel.Parent = self.Frame;
+    
+    self.CloseButton = Instance.new("ImageButton");
+    self.CloseButton.Name = "CloseButton";
+    self.CloseButton.Size = UDim2.new(0, 16 * (height/NOTIFICATION_HEIGHT), 0, 16 * (height/NOTIFICATION_HEIGHT));
+    self.CloseButton.Position = UDim2.new(1, -24 * (width/NOTIFICATION_WIDTH), 0, 16 * (height/NOTIFICATION_HEIGHT));
+    self.CloseButton.BackgroundTransparency = 1;
+    self.CloseButton.Image = "rbxassetid://7733717447";
+    self.CloseButton.ImageColor3 = THEME.SubText;
+    self.CloseButton.Parent = self.Frame;
+    
+    self.ProgressContainer = Instance.new("Frame");
+    self.ProgressContainer.Name = "ProgressContainer";
+    self.ProgressContainer.Size = UDim2.new(1, 0, 0, 4);
+    self.ProgressContainer.Position = UDim2.new(0, 0, 1, -4);
+    self.ProgressContainer.BackgroundTransparency = 0.9;
+    self.ProgressContainer.BackgroundColor3 = Color3.fromRGB(100, 100, 100);
+    self.ProgressContainer.BorderSizePixel = 0;
+    self.ProgressContainer.Parent = self.Frame;
+    
+    self.ProgressBar = Instance.new("Frame");
+    self.ProgressBar.Name = "ProgressBar";
+    self.ProgressBar.Size = UDim2.new(1, 0, 1, 0);
+    self.ProgressBar.BackgroundColor3 = typeInfo.Color;
+    self.ProgressBar.BorderSizePixel = 0;
+    self.ProgressBar.Parent = self.ProgressContainer;
+    
+    self._maid:AddTask(self.CloseButton.MouseButton1Click:Connect(function()
+        self:Destroy();
+    end));
+    
+    table.insert(ActiveNotifications, self);
+    
+    self:UpdatePositions();
+    
+    local targetPosition = UDim2.new(0, NOTIFICATION_PADDING, 1, -NOTIFICATION_PADDING);
+    TweenService:Create(self.Frame, TWEEN_INFO, {Position = targetPosition, AnchorPoint = Vector2.new(0, 1)}):Play();
+    
+    local progressTween = TweenService:Create(self.ProgressBar, PROGRESS_TWEEN_INFO, {Size = UDim2.new(0, 0, 1, 0)});
+    progressTween:Play();
+    
+    self._maid:AddTask(progressTween.Completed:Connect(function()
+        if self._destroyed then return end;
+        self:Destroy();
+    end));
+    
+    if self.Callback then
+        self.ClickableArea = Instance.new("TextButton");
+        self.ClickableArea.Name = "ClickableArea";
+        self.ClickableArea.Size = UDim2.new(1, 0, 1, -4);
+        self.ClickableArea.Position = UDim2.new(0, 0, 0, 0);
+        self.ClickableArea.BackgroundTransparency = 1;
+        self.ClickableArea.Text = "";
+        self.ClickableArea.Parent = self.Frame;
+        
+        self._maid:AddTask(self.ClickableArea.MouseButton1Click:Connect(function()
+            self.Callback();
+            self:Destroy();
+        end));
+    end;
+    
+    return self;
+end;
+
+function Notification:UpdatePositions()
+    local totalHeight = 0;
+    
+    for i = #ActiveNotifications, 1, -1 do
+        local notif = ActiveNotifications[i];
+        if notif._destroyed then continue end;
+        
+        local width, height = notif:GetScaledSize();
+        
+        local newY = -NOTIFICATION_PADDING - totalHeight;
+        local targetPosition = UDim2.new(0, NOTIFICATION_PADDING, 1, newY);
+        
+        if notif == self then
+            notif.originalPosition = targetPosition;
+        else
+            TweenService:Create(notif.Frame, TWEEN_INFO, {
+                Position = targetPosition,
+                AnchorPoint = Vector2.new(0, 1)
+            }):Play();
+        end;
+        
+        totalHeight = totalHeight + height + NOTIFICATION_GAP;
+    end;
+end;
+
+function Notification:Destroy()
+    if self._destroyed then return end;
+    self._destroyed = true;
+    
+    self.Destroying:Fire();
+    
+    local targetPosition = UDim2.new(0.5, 0, 1, NOTIFICATION_PADDING);
+    local tween = TweenService:Create(self.Frame, TWEEN_INFO, {
+        Position = targetPosition,
+        Transparency = 1
+    });
+    
+    tween:Play();
+    
+    self._maid:AddTask(tween.Completed:Connect(function()
+        local index = table.find(ActiveNotifications, self);
+        if index then
+            table.remove(ActiveNotifications, index);
+        end;
+        
+        if #ActiveNotifications > 0 then
+            ActiveNotifications[1]:UpdatePositions();
+        end;
+        
+        self.Frame:Destroy();
+        self._maid:Clean();
+    end));
+end;
+
+function NotificationSystem.new()
+    local self = setmetatable({}, NotificationSystem);
+    self._maid = Maid.new();
+    return self;
+end;
+
+function NotificationSystem:Create(options)
+    return Notification.new(options);
+end;
+
+function NotificationSystem:Notify(title, message, notificationType, duration, callback)
+    return self:Create({
+        Title = title,
+        Text = message,
+        Type = notificationType or "Info",
+        Duration = duration,
+        Callback = callback
+    });
+end;
+
+function NotificationSystem:Info(title, message, duration, callback)
+    return self:Notify(title, message, "Info", duration, callback);
+end;
+
+function NotificationSystem:Success(title, message, duration, callback)
+    return self:Notify(title, message, "Success", duration, callback);
+end;
+
+function NotificationSystem:Warning(title, message, duration, callback)
+    return self:Notify(title, message, "Warning", duration, callback);
+end;
+
+function NotificationSystem:Error(title, message, duration, callback)
+    return self:Notify(title, message, "Error", duration, callback);
+end;
+
+function NotificationSystem:ClearAll()
+    for _, notification in ipairs(ActiveNotifications) do
+        notification:Destroy();
+    end;
+end;
+
+function NotificationSystem:Destroy()
+    self:ClearAll();
+    self._maid:Clean();
+end;
+
+return NotificationSystem.new();
+--[[
+local Notifications = NotificationSystem.new()
+NotificationSystem:Info("Information", "This is an informational message")
+NotificationSystem:Warning("Warning", "This action may cause issues")
+NotificationSystem:Error("Error", "Something went wrong")]]
+]]
