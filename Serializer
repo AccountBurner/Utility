@@ -1,0 +1,102 @@
+local function prettyPrint(...)
+    local type = typeof or type
+    local str_types = {
+        ['boolean'] = true,
+        ['userdata'] = true,
+        ['table'] = true,
+        ['function'] = true,
+        ['number'] = true,
+        ['nil'] = true
+    }
+    
+    local function count_table(tab)
+        local c = 0
+        for _, _ in next, tab do
+            c = c + 1
+        end
+        return c
+    end
+    
+    local function string_ret(o, typ)
+        if not (typ == 'table' or typ == 'userdata') then
+            return tostring(o)
+        end
+        
+        local mt = (getrawmetatable or getmetatable)(o)
+        if not mt then
+            return tostring(o)
+        end
+        
+        local old_func = rawget(mt, '__tostring')
+        rawset(mt, '__tostring', nil)
+        local ret = tostring(o)
+        rawset(mt, '__tostring', old_func)
+        return ret
+    end
+    
+    local function format_value(v)
+        local typ = type(v)
+        
+        if str_types[typ] then
+            return string_ret(v, typ)
+        elseif typ == 'string' then
+            return '"'..v..'"'
+        elseif typ == 'Instance' then
+            return v:GetFullName()
+        else
+            return typ..'.new(' .. tostring(v) .. ')'
+        end
+    end
+    
+    local function serialize_table(tab, indent, cache, space)
+        local str = ""
+        local n = count_table(tab)
+        local ti = 1
+        local e = n > 0
+        
+        cache = cache or {}
+        indent = indent or 1
+        space = space or string.rep
+        
+        local function localized_format(v, is_table)
+            return is_table and (cache[v][2] >= indent) and 
+                   serialize_table(v, indent + 1, cache, space) or 
+                   format_value(v)
+        end
+        
+        cache[tab] = {tab, 0}
+        
+        for i, v in next, tab do
+            local typ_i, typ_v = type(i) == 'table', type(v) == 'table'
+            
+            cache[i] = (not cache[i] and typ_i) and {i, indent} or cache[i]
+            cache[v] = (not cache[v] and typ_v) and {v, indent} or cache[v]
+            
+            str = str .. space('  ', indent) .. 
+                  '[' .. localized_format(i, typ_i) .. '] = ' ..
+                  localized_format(v, typ_v) .. 
+                  (ti < n and ',' or '') .. '\n'
+                  
+            ti = ti + 1
+        end
+        
+        return ('{' .. (e and '\n' or '')) .. str .. 
+               (e and space('  ', indent - 1) or '') .. '}'
+    end
+    
+    return serialize_table(...)
+end
+
+getgenv().prettyPrint = prettyPrint
+
+return prettyPrint
+
+--[[ How to use:
+local myTable = {
+    a = 1,
+    b = "Hello",
+    c = {1, 2, 3},
+    d = game.Workspace
+}
+ print(prettyPrint(myTable))
+ ]]
