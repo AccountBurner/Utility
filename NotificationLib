@@ -4,10 +4,6 @@ if not LPH_OBFUSCATED then
     LPH_CRASH = function() while true do end end;
 end;
 
-for _, c in next, getconnections(game:GetService("ScriptContext").Error) do
-    c:Disable();
-end;
-
 local MaidSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Maid.lua");
 local SignalSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Signal");
 local ServicesSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Services");
