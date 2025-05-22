@@ -482,21 +482,26 @@ function ChamObject:Destruct()
 end
 
 function ChamObject:Update()
-    local highlight = self.highlight;
     local interface = self.interface;
     local character = interface.getCharacter(self.player);
     local options = interface.teamSettings[interface.isFriendly(self.player) and "friendly" or "enemy"];
     local enabled = options.enabled and character and not
         (#interface.whitelist > 0 and not find(interface.whitelist, self.player.UserId));
 
-    highlight.Enabled = enabled and options.chams;
-    if highlight.Enabled then
-        highlight.DepthMode = options.chamsVisibleOnly and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop;
-        highlight.Adornee = character;
-        highlight.FillColor = options.chamsFillColor[1];
-        highlight.FillTransparency = options.chamsFillColor[2];
-        highlight.OutlineColor = options.chamsOutlineColor[1];
-        highlight.OutlineTransparency = options.chamsOutlineColor[2];
+    if not self.highlight or not self.highlight.Parent then
+        self.highlight = Instance.new("Highlight");
+        self.highlight.Parent = container;
+        self.maid:AddTask(self.highlight);
+    end
+
+    self.highlight.Enabled = enabled and options.chams;
+    if self.highlight.Enabled then
+        self.highlight.DepthMode = options.chamsVisibleOnly and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop;
+        self.highlight.Adornee = character;
+        self.highlight.FillColor = options.chamsFillColor[1];
+        self.highlight.FillTransparency = options.chamsFillColor[2];
+        self.highlight.OutlineColor = options.chamsOutlineColor[1];
+        self.highlight.OutlineTransparency = options.chamsOutlineColor[2];
     end
 end
 
