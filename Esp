@@ -573,8 +573,12 @@ function InstanceEspObject:Construct()
         }
     };
     
-    -- Create 3D box if enabled
-    if self.customOptions.box3d then
+    local options = self.customOptions;
+    if type(options) == "function" then
+        options = options();
+    end
+    
+    if options and options.box3d then
         for i = 1, 4 do
             self.drawings.box3d[i] = {
                 self:create("Line", { Thickness = 1, Visible = false }),
@@ -643,8 +647,15 @@ function InstanceEspObject:Update()
     self.options = interface.instanceSettings or interface.teamSettings.enemy;
     
     if self.customOptions then
-        for key, value in pairs(self.customOptions) do
-            self.options[key] = value;
+        if type(self.customOptions) == "function" then
+            local freshOptions = self.customOptions();
+            for key, value in pairs(freshOptions) do
+                self.options[key] = value;
+            end
+        else
+            for key, value in pairs(self.customOptions) do
+                self.options[key] = value;
+            end
         end
     end
     
@@ -941,6 +952,7 @@ function InstanceEspObject:UpdateSettings(newSettings)
         self.customOptions[key] = value;
     end
 end
+
 local InstanceChamObject = {};
 InstanceChamObject.__index = InstanceChamObject;
 
@@ -982,6 +994,10 @@ function InstanceChamObject:Update()
     end
     
     local options = self.customOptions;
+    if type(options) == "function" then
+        options = options();
+    end
+    
     local enabled = options.enabled and options.chams;
     
     if self.highlight then
