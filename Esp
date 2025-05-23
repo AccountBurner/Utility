@@ -480,7 +480,6 @@ function ChamObject:Destruct()
     self.maid:Cleanup();
     clear(self);
 end
-
 function ChamObject:Update()
     local interface = self.interface;
     local character = interface.getCharacter(self.player);
@@ -488,21 +487,45 @@ function ChamObject:Update()
     local enabled = options.enabled and character and not
         (#interface.whitelist > 0 and not find(interface.whitelist, self.player.UserId));
 
-    if not self.highlight or not self.highlight.Parent then
-        self.highlight = Instance.new("Highlight");
-        self.highlight.Parent = container;
-        self.maid:AddTask(self.highlight);
-    end
-
-    self.highlight.Enabled = enabled and options.chams;
-    if self.highlight.Enabled then
-        self.highlight.DepthMode = options.chamsVisibleOnly and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop;
-        self.highlight.Adornee = character;
-        self.highlight.FillColor = options.chamsFillColor[1];
-        self.highlight.FillTransparency = options.chamsFillColor[2];
-        self.highlight.OutlineColor = options.chamsOutlineColor[1];
-        self.highlight.OutlineTransparency = options.chamsOutlineColor[2];
-    end
+    if enabled and options.chams then
+        if not self.highlight or not self.highlight.Parent or not pcall(function() return self.highlight.Enabled end) then
+            if self.highlight then
+                pcall(function() self.highlight:Destroy() end);
+                self.highlight = nil;
+            end;
+            
+            local success, newHighlight = pcall(function()
+                local highlight = Instance.new("Highlight");
+                highlight.Parent = container;
+                return highlight;
+            end);
+            
+            if success and newHighlight then
+                self.highlight = newHighlight;
+                self.maid:AddTask(self.highlight);
+            else
+                return;
+            end;
+        end;
+        
+        if self.highlight and pcall(function() return self.highlight.Parent end) then
+            pcall(function()
+                self.highlight.Enabled = true;
+                self.highlight.DepthMode = options.chamsVisibleOnly and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop;
+                self.highlight.Adornee = character;
+                self.highlight.FillColor = options.chamsFillColor[1];
+                self.highlight.FillTransparency = options.chamsFillColor[2];
+                self.highlight.OutlineColor = options.chamsOutlineColor[1];
+                self.highlight.OutlineTransparency = options.chamsOutlineColor[2];
+            end);
+        end;
+    else
+        if self.highlight and pcall(function() return self.highlight.Parent end) then
+            pcall(function()
+                self.highlight.Enabled = false;
+            end);
+        end;
+    end;
 end
 
 -- Instance ESP Object
@@ -523,7 +546,10 @@ function InstanceEspObject:Construct()
     self.charCache = {};
     self.childCount = 0;
     self.bin = {};
-    
+
+    if not self.customOptions then
+        self.customOptions = {};
+    end
     -- Create drawing objects
     self.drawings = {
         box3d = {},
@@ -538,6 +564,7 @@ function InstanceEspObject:Construct()
             healthText = self:create("Text", { Center = true, Visible = false }),
             name = self:create("Text", { Text = self.instance.Name, Center = true, Visible = false }),
             distance = self:create("Text", { Center = true, Visible = false }),
+            weapon = self:create("Text", { Center = true, Visible = false }),  
             customText = self:create("Text", { Center = true, Visible = false }),
         },
         hidden = {
@@ -615,9 +642,10 @@ function InstanceEspObject:Update()
     local interface = self.interface;
     self.options = interface.instanceSettings or interface.teamSettings.enemy;
     
-    -- Apply custom options directly to self.options
-    for key, value in pairs(self.customOptions) do
-        self.options[key] = value;
+    if self.customOptions then
+        for key, value in pairs(self.customOptions) do
+            self.options[key] = value;
+        end
     end
     
     self.enabled = self.options.enabled;
@@ -678,12 +706,19 @@ end
 function InstanceEspObject:Render()
     local onScreen = self.onScreen or false;
     local enabled = self.enabled or false;
-    local visible = self.drawings.visible;
-    local hidden = self.drawings.hidden;
-    local box3d = self.drawings.box3d;
+    local visible = self.drawings and self.drawings.visible or {};
+    local hidden = self.drawings and self.drawings.hidden or {};
+    local box3d = self.drawings and self.drawings.box3d or {};
     local interface = self.interface;
     local options = self.options;
     local corners = self.corners;
+    self.weapon = "Unknown";
+    if self.player and self.interface.getWeapon then
+        self.weapon = self.interface.getWeapon(self.player);
+    end
+    if not self.drawings or not self.drawings.visible then
+        return;
+    end
     
     if not corners then
         for _, drawing in pairs(visible) do
@@ -834,7 +869,22 @@ function InstanceEspObject:Render()
         tracerOutline.To = tracer.To;
         tracerOutline.From = tracer.From;
     end
-    
+    -- Weapon ESP
+    visible.weapon.Visible = enabled and onScreen and options.weapon;
+    if visible.weapon.Visible then
+        local weapon = visible.weapon;
+        weapon.Text = self.weapon;
+        weapon.Size = interface.sharedSettings.textSize;
+        weapon.Font = interface.sharedSettings.textFont;
+        weapon.Color = options.weaponColor[1];
+        weapon.Transparency = options.weaponColor[2];
+        weapon.Outline = options.weaponOutline;
+        weapon.OutlineColor = options.weaponOutlineColor;
+        weapon.Position =
+            (corners.bottomLeft + corners.bottomRight)*0.5 +
+            (visible.distance.Visible and DISTANCE_OFFSET + Vector2.yAxis*visible.distance.TextBounds.Y or Vector2.zero);
+    end
+
     -- Off-screen arrow
     hidden.arrow.Visible = enabled and (not onScreen) and options.offScreenArrow;
     hidden.arrowOutline.Visible = hidden.arrow.Visible and options.offScreenArrowOutline;
@@ -884,10 +934,69 @@ function InstanceEspObject:Render()
 end
 
 function InstanceEspObject:UpdateSettings(newSettings)
+    if not self.customOptions then
+        self.customOptions = {};
+    end
     for key, value in pairs(newSettings) do
         self.customOptions[key] = value;
     end
 end
+local InstanceChamObject = {};
+InstanceChamObject.__index = InstanceChamObject;
+
+function InstanceChamObject.new(instance, interface, customOptions)
+    local self = setmetatable({}, InstanceChamObject);
+    self.instance = instance;
+    self.interface = interface;
+    self.customOptions = customOptions or {};
+    self.maid = Maid.new();
+    self:Construct();
+    return self;
+end
+
+function InstanceChamObject:Construct()
+    self.highlight = Instance.new("Highlight");
+    self.highlight.Parent = workspace;
+    self.maid:AddTask(self.highlight);
+    
+    self.updateConnection = runService.Heartbeat:Connect(function()
+        self:Update();
+    end);
+    
+    self.maid:AddTask(self.updateConnection);
+end
+
+function InstanceChamObject:Destruct()
+    if self.highlight then
+        self.highlight:Destroy();
+        self.highlight = nil;
+    end
+    if self.maid then
+        self.maid:Cleanup();
+    end
+end
+
+function InstanceChamObject:Update()
+    if not self.instance or not self.instance.Parent then
+        return self:Destruct();
+    end
+    
+    local options = self.customOptions;
+    local enabled = options.enabled and options.chams;
+    
+    if self.highlight then
+        self.highlight.Enabled = enabled;
+        if enabled then
+            self.highlight.Adornee = self.instance;
+            self.highlight.DepthMode = options.chamsVisibleOnly and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop;
+            self.highlight.FillColor = options.chamsFillColor[1];
+            self.highlight.FillTransparency = options.chamsFillColor[2];
+            self.highlight.OutlineColor = options.chamsOutlineColor[1];
+            self.highlight.OutlineTransparency = options.chamsOutlineColor[2];
+        end
+    end
+end
+
 
 -- Instance Object
 local InstanceObject = {};
