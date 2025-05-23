@@ -723,10 +723,7 @@ function InstanceEspObject:Render()
     local interface = self.interface;
     local options = self.options;
     local corners = self.corners;
-    self.weapon = "Unknown";
-    if self.player and self.interface.getWeapon then
-        self.weapon = self.interface.getWeapon(self.player);
-    end
+
     if not self.drawings or not self.drawings.visible then
         return;
     end
@@ -884,7 +881,7 @@ function InstanceEspObject:Render()
     visible.weapon.Visible = enabled and onScreen and options.weapon;
     if visible.weapon.Visible then
         local weapon = visible.weapon;
-        weapon.Text = self.weapon;
+        weapon.Text = options.weaponText or "Unknown";
         weapon.Size = interface.sharedSettings.textSize;
         weapon.Font = interface.sharedSettings.textFont;
         weapon.Color = options.weaponColor[1];
