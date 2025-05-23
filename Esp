@@ -1365,4 +1365,5 @@ function EspInterface.getHealth(character)
     end
     return 100, 100;
 end
+EspInterface.InstanceChamObject = InstanceChamObject;
 return EspInterface;
