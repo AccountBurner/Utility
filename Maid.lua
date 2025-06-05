@@ -5,7 +5,8 @@ function Maid.new()
     return setmetatable({
         _tasks = {},
         _features = {},
-        _indices = {}
+        _indices = {},
+        _threads = {}
     }, Maid)
 end
 
@@ -19,6 +20,11 @@ function Maid:AddTask(task, feature)
     end
     
     table.insert(self._tasks, task)
+    
+    if typeof(task) == "thread" then
+        table.insert(self._threads, task)
+    end
+    
     return task
 end
 
@@ -80,6 +86,13 @@ function Maid:Remove(task)
             end
         end
     end
+    
+    for i, v in ipairs(self._threads) do
+        if v == task then
+            table.remove(self._threads, i)
+            return
+        end
+    end
 end
 
 function Maid:_cleanupTask(task)
@@ -87,22 +100,34 @@ function Maid:_cleanupTask(task)
         return
     end
     
-    if typeof(task) == "function" then
+    local taskType = typeof(task)
+    
+    if taskType == "function" then
         task()
-    elseif typeof(task) == "RBXScriptConnection" then
+    elseif taskType == "RBXScriptConnection" then
         task:Disconnect()
-    elseif typeof(task) == "Instance" then
+    elseif taskType == "Instance" then
         task:Destroy()
-    elseif typeof(task) == "table" and task.Destroy then
-        task:Destroy()
-    elseif typeof(task) == "table" and task.Disconnect then
-        task:Disconnect()
-    elseif typeof(task) == "table" and task.destroy then
-        task:destroy()
-    elseif typeof(task) == "table" and task.disconnect then
-        task:disconnect()
-    elseif typeof(task) == "table" and task.Clean then
-        task:Clean()
+    elseif taskType == "thread" then
+        if coroutine.status(task) ~= "dead" then
+            pcall(function()
+                coroutine.close(task)
+            end)
+        end
+    elseif taskType == "table" then
+        if task.Destroy then
+            task:Destroy()
+        elseif task.Disconnect then
+            task:Disconnect()
+        elseif task.destroy then
+            task:destroy()
+        elseif task.disconnect then
+            task:disconnect()
+        elseif task.Clean then
+            task:Clean()
+        elseif task.cancel then
+            task:cancel()
+        end
     end
 end
 
@@ -113,6 +138,7 @@ function Maid:Clean()
     table.clear(self._tasks)
     table.clear(self._features)
     table.clear(self._indices)
+    table.clear(self._threads)
 end
 
 function Maid:Cleanup(feature)
@@ -122,6 +148,17 @@ function Maid:Cleanup(feature)
             self:_cleanupTask(task)
         end
         self._features[feature] = {}
+        
+        for i = #self._tasks, 1, -1 do
+            local task = self._tasks[i]
+            for _, featureTask in ipairs(self._features[feature] or {}) do
+                if task == featureTask then
+                    table.remove(self._tasks, i)
+                    break
+                end
+            end
+        end
+        
         return
     end
     
@@ -132,6 +169,7 @@ function Maid:Cleanup(feature)
     self._tasks = {}
     self._features = {}
     self._indices = {}
+    self._threads = {}
 end
 
 function Maid:Destroy()
