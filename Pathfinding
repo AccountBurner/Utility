@@ -287,8 +287,17 @@ function Path:GetPath(target)
 		return nil
 	end
 
+	--Get waypoints
+	local waypoints = self._path:GetWaypoints()
+
+	--Visualize waypoints if enabled
+	if self.Visualize then
+		destroyVisualWaypoints(self._visualWaypoints)
+		self._visualWaypoints = createVisualWaypoints(waypoints)
+	end
+
 	--Return waypoints
-	return self._path:GetWaypoints()
+	return waypoints
 end
 
 function Path:Run(target)
