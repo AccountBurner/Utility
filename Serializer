@@ -1,102 +1,192 @@
-local function prettyPrint(...)
-    local type = typeof or type
-    local str_types = {
-        ['boolean'] = true,
-        ['userdata'] = true,
-        ['table'] = true,
-        ['function'] = true,
-        ['number'] = true,
-        ['nil'] = true
-    }
-    
-    local function count_table(tab)
-        local c = 0
-        for _, _ in next, tab do
-            c = c + 1
-        end
-        return c
-    end
-    
-    local function string_ret(o, typ)
-        if not (typ == 'table' or typ == 'userdata') then
-            return tostring(o)
-        end
-        
-        local mt = (getrawmetatable or getmetatable)(o)
-        if not mt then
-            return tostring(o)
-        end
-        
-        local old_func = rawget(mt, '__tostring')
-        rawset(mt, '__tostring', nil)
-        local ret = tostring(o)
-        rawset(mt, '__tostring', old_func)
-        return ret
-    end
-    
-    local function format_value(v)
-        local typ = type(v)
-        
-        if str_types[typ] then
-            return string_ret(v, typ)
-        elseif typ == 'string' then
-            return '"'..v..'"'
-        elseif typ == 'Instance' then
-            return v:GetFullName()
-        else
-            return typ..'.new(' .. tostring(v) .. ')'
+
+local serializer = {}
+
+local function tbl_contains(tbl, value)
+    for _, v in pairs(tbl) do
+        if v == value then
+            return true
         end
     end
-    
-    local function serialize_table(tab, indent, cache, space)
-        local str = ""
-        local n = count_table(tab)
-        local ti = 1
-        local e = n > 0
-        
-        cache = cache or {}
-        indent = indent or 1
-        space = space or string.rep
-        
-        local function localized_format(v, is_table)
-            return is_table and (cache[v][2] >= indent) and 
-                   serialize_table(v, indent + 1, cache, space) or 
-                   format_value(v)
-        end
-        
-        cache[tab] = {tab, 0}
-        
-        for i, v in next, tab do
-            local typ_i, typ_v = type(i) == 'table', type(v) == 'table'
-            
-            cache[i] = (not cache[i] and typ_i) and {i, indent} or cache[i]
-            cache[v] = (not cache[v] and typ_v) and {v, indent} or cache[v]
-            
-            str = str .. space('  ', indent) .. 
-                  '[' .. localized_format(i, typ_i) .. '] = ' ..
-                  localized_format(v, typ_v) .. 
-                  (ti < n and ',' or '') .. '\n'
-                  
-            ti = ti + 1
-        end
-        
-        return ('{' .. (e and '\n' or '')) .. str .. 
-               (e and space('  ', indent - 1) or '') .. '}'
-    end
-    
-    return serialize_table(...)
+    return false
 end
 
-getgenv().prettyPrint = prettyPrint
-
-return prettyPrint
-
---[[ How to use:
-local myTable = {
-    a = 1,
-    b = "Hello",
-    c = {1, 2, 3},
-    d = game.Workspace
+local METAMETHOD_NAMES = {
+    "__index", "__newindex", "__call", "__concat", "__unm", "__add", "__sub", 
+    "__mul", "__div", "__mod", "__pow", "__tostring", "__eq", "__lt", "__le",
+    "__metatable", "__mode", "__len", "__pairs", "__ipairs", "__gc"
 }
- print(prettyPrint(myTable))
- ]]
+
+function serializer.createIndent(level)
+    level = type(level) == "number" and level or 0
+    return string.rep("  ", level)
+end
+
+function serializer.recreateFunction(f)
+    local info = debug.getinfo(f, "un")
+    local params = {}
+    
+    for i = 1, info.numparams do
+        table.insert(params, "_" .. i)
+    end
+    
+    if info.is_vararg then
+        table.insert(params, "...")
+    end
+    
+    local name = info.name or "<func>"
+    return name .. "(" .. table.concat(params, ", ") .. ")"
+end
+
+function serializer.isService(instance)
+    if type(instance) ~= "userdata" then
+        return false
+    end
+    
+    local success, service = pcall(function()
+        return game:GetService(instance.ClassName)
+    end)
+    
+    return success and service == instance
+end
+
+function serializer.formatPosition(value)
+    if typeof(value) == "CFrame" then
+        local pos = value.Position
+        return string.format("CFrame.new(%f, %f, %f)", pos.X, pos.Y, pos.Z)
+    elseif typeof(value) == "Vector3" then
+        return string.format("Vector3.new(%f, %f, %f)", value.X, value.Y, value.Z)
+    elseif typeof(value) == "Vector2" then
+        return string.format("Vector2.new(%f, %f)", value.X, value.Y)
+    end
+    return tostring(value)
+end
+
+function serializer.formatMetamethod(metamethod)
+    if type(metamethod) == "function" then
+        return serializer.recreateFunction(metamethod)
+    elseif type(metamethod) == "table" then
+        return "table reference"
+    else
+        return tostring(metamethod)
+    end
+end
+
+function serializer.formatValue(k, indentLevel, visitedTables)
+    indentLevel = type(indentLevel) == "number" and indentLevel or 0
+    visitedTables = visitedTables or {}
+    
+    local indent = serializer.createIndent(indentLevel)
+    local innerIndent = serializer.createIndent(indentLevel + 1)
+
+    if typeof(k) == "string" then
+        return '"' .. k:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n'):gsub('\r', '\\r'):gsub('\t', '\\t') .. '"'
+    elseif typeof(k) == "number" then
+        return string.format("%g", k)
+    elseif typeof(k) == "boolean" then
+        return tostring(k)
+    elseif typeof(k) == "Enum" then
+        return tostring(k)
+    elseif typeof(k) == "EnumItem" then
+        return tostring(k)
+    elseif typeof(k) == "Vector2" or typeof(k) == "Vector3" or typeof(k) == "CFrame" then
+        return serializer.formatPosition(k)
+    elseif typeof(k) == "Color3" then
+        local r, g, b = k.R, k.G, k.B
+        return string.format("Color3.new(%f, %f, %f)", r, g, b)
+    elseif serializer.isService(k) then
+        return 'game:GetService("'..k.ClassName..'")'
+    elseif typeof(k) == "Instance" then
+        return "game." .. tostring(k:GetFullName())
+    elseif typeof(k) == "function" then
+        return serializer.recreateFunction(k)
+    elseif typeof(k) == "thread" then
+        return "<"..tostring(k)..">"
+    elseif typeof(k) == "table" then
+        if visitedTables[k] then
+            return "<Circular Reference>"
+        end
+        visitedTables[k] = true
+
+        local tableStr = "{\n"
+        local keys = {}
+        for key in pairs(k) do
+            table.insert(keys, key)
+        end
+        table.sort(keys, function(a, b) 
+            return tostring(a) < tostring(b) 
+        end)
+
+        for _, key in ipairs(keys) do
+            local value = k[key]
+            local keyStr = "[" .. serializer.formatValue(key, indentLevel + 1, visitedTables) .. "]"
+            local valueStr = serializer.formatValue(value, indentLevel + 1, visitedTables)
+            tableStr = tableStr .. innerIndent .. keyStr .. " = " .. valueStr .. ",\n"
+        end
+        
+        local mt = getmetatable(k)
+        if mt then
+            tableStr = tableStr .. innerIndent .. "[__metatable] = {\n"
+            
+            for _, metamethodName in ipairs(METAMETHOD_NAMES) do
+                local metamethod = mt[metamethodName]
+                if metamethod ~= nil then
+                    tableStr = tableStr .. 
+                        innerIndent .. "  [" .. 
+                        serializer.formatValue(metamethodName, indentLevel + 2, visitedTables) .. 
+                        "] = " .. serializer.formatMetamethod(metamethod) .. ",\n"
+                end
+            end
+            
+            for key, value in pairs(mt) do
+                if type(key) == "string" and key:match("^__") and 
+                   not tbl_contains(METAMETHOD_NAMES, key) then
+                    tableStr = tableStr .. 
+                        innerIndent .. "  [" .. 
+                        serializer.formatValue(key, indentLevel + 2, visitedTables) .. 
+                        "] = " .. serializer.formatMetamethod(value) .. ",\n"
+                end
+            end
+            
+            tableStr = tableStr .. innerIndent .. "},\n"
+        end
+        
+        visitedTables[k] = nil
+        return tableStr .. indent .. "}"
+    else
+        print("-- Unknown type: " .. typeof(k))
+        return "nil"
+    end
+end
+
+function serializer.Serialize(t, indentLevel)
+    indentLevel = type(indentLevel) == "number" and indentLevel or 0
+    local indent = serializer.createIndent(indentLevel)
+    local serializedTable = "{\n"
+
+    local keys = {}
+    for k in pairs(t) do
+        table.insert(keys, k)
+    end
+    table.sort(keys, function(a, b) 
+        return tostring(a) < tostring(b) 
+    end)
+
+    for _, k in ipairs(keys) do
+        local v = t[k]
+        local keyString = "[" .. serializer.formatValue(k, indentLevel + 1) .. "]"
+        local valueString = serializer.formatValue(v, indentLevel + 1)
+        serializedTable = serializedTable .. indent .. "  " .. keyString .. " = " .. valueString .. ",\n"
+    end
+
+    serializedTable = serializedTable .. indent .. "}"
+    return serializedTable
+end
+
+getgenv().serializer = serializer
+return serializer
+--[[ 
+    Usage:
+    local serializer = require(script.Serializer)
+    local myTable = { key1 = "value1", key2 = 42, key3 = game.Workspace }
+    print(serializer.Serialize(myTable))
+]]--
