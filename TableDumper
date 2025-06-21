@@ -1,0 +1,128 @@
+local TableDumper = {};
+
+local typeSolvers = {
+    string = function(v)
+        return '"' .. v:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t") .. '"';
+    end,
+    number = function(v)
+        return tostring(v);
+    end,
+    boolean = function(v)
+        return tostring(v);
+    end,
+    ["function"] = function(v)
+        return "function() end";
+    end,
+    ["nil"] = function(v)
+        return "nil";
+    end,
+    thread = function(v)
+        return "thread";
+    end,
+    userdata = function(v)
+        local success, result = pcall(function()
+            if typeof then
+                local t = typeof(v);
+                if t == "Instance" then
+                    return "game." .. v:GetFullName();
+                elseif t == "Vector3" then
+                    return string.format("Vector3.new(%g, %g, %g)", v.X, v.Y, v.Z);
+                elseif t == "Vector2" then
+                    return string.format("Vector2.new(%g, %g)", v.X, v.Y);
+                elseif t == "CFrame" then
+                    local p = v.Position;
+                    return string.format("CFrame.new(%g, %g, %g)", p.X, p.Y, p.Z);
+                elseif t == "Color3" then
+                    return string.format("Color3.new(%g, %g, %g)", v.R, v.G, v.B);
+                elseif t == "EnumItem" then
+                    return tostring(v);
+                end;
+            end;
+        end);
+        if success and result then
+            return result;
+        end;
+        return "userdata";
+    end,
+    table = function(v)
+        return "table";
+    end
+};
+
+function TableDumper.solve(value)
+    local t = type(value);
+    local solver = typeSolvers[t];
+    if solver then
+        return solver(value);
+    end;
+    return tostring(value);
+end;
+
+function TableDumper.dump(tbl, depth)
+    depth = depth or 3;
+    
+    local function dumpInternal(t, currentDepth, visited)
+        if currentDepth > depth then
+            return "...";
+        end;
+        
+        if type(t) ~= "table" then
+            return TableDumper.solve(t);
+        end;
+        
+        if visited[t] then
+            return "CIRCULAR";
+        end;
+        
+        visited[t] = true;
+        
+        local indent = string.rep("  ", currentDepth);
+        local nextIndent = string.rep("  ", currentDepth + 1);
+        local parts = {"{"}; 
+        
+        local keys = {};
+        for k in pairs(t) do
+            table.insert(keys, k);
+        end;
+        
+        table.sort(keys, function(a, b)
+            if type(a) == type(b) then
+                if type(a) == "number" then
+                    return a < b;
+                else
+                    return tostring(a) < tostring(b);
+                end;
+            end;
+            return type(a) < type(b);
+        end);
+        
+        for _, k in ipairs(keys) do
+            local v = t[k];
+            local keyStr;
+            
+            if type(k) == "string" and k:match("^[%a_][%w_]*$") then
+                keyStr = k;
+            else
+                keyStr = "[" .. TableDumper.solve(k) .. "]";
+            end;
+            
+            local valueStr;
+            if type(v) == "table" then
+                valueStr = dumpInternal(v, currentDepth + 1, visited);
+            else
+                valueStr = TableDumper.solve(v);
+            end;
+            
+            table.insert(parts, nextIndent .. keyStr .. " = " .. valueStr .. ",");
+        end;
+        
+        table.insert(parts, indent .. "}");
+        
+        visited[t] = nil;
+        return table.concat(parts, "\n");
+    end;
+    
+    return dumpInternal(tbl, 0, {});
+end;
+
+return TableDumper;
