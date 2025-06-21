@@ -25,7 +25,7 @@ function serializer.recreateFunction(f)
     local info = debug.getinfo(f, "un")
     local params = {}
     
-    for i = 1, info.numparams do
+    for i = 1, info.numparams or 0 do
         table.insert(params, "_" .. i)
     end
     
