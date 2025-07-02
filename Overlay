@@ -59,8 +59,8 @@ local function CreateOverlay()
     StatsContainer.BackgroundTransparency = 1
     
     local ToggleButton = Instance.new('TextButton', Container)
-    ToggleButton.Size = UDim2.new(0, 80, 0, 25)
-    ToggleButton.Position = UDim2.new(0.5, -40, 1, -35)
+    ToggleButton.Size = UDim2.new(0, 120, 0, 35)
+    ToggleButton.Position = UDim2.new(0.5, -60, 1, -45)
     ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
     ToggleButton.Text = 'Hide'
     ToggleButton.TextColor3 = Color3.new(1, 1, 1)
@@ -76,11 +76,11 @@ local function CreateOverlay()
         ImageLabel.Visible = Container.Visible
         if not Container.Visible then
             ToggleButton.Parent = OverlayGui
-            ToggleButton.Position = UDim2.new(0.5, -40, 0.5, 0)
+            ToggleButton.Position = UDim2.new(0.5, -60, 0.5, 0)
             ToggleButton.Text = 'Show'
         else
             ToggleButton.Parent = Container
-            ToggleButton.Position = UDim2.new(0.5, -40, 1, -35)
+            ToggleButton.Position = UDim2.new(0.5, -60, 1, -45)
             ToggleButton.Text = 'Hide'
         end
     end), "3DRendering")
@@ -109,7 +109,14 @@ function OverlaySystem.Toggle3DRendering(enabled)
     OverlayMaid:Cleanup("3DRendering");
     if enabled then
         CreateOverlay()
-        OverlayMaid:AddTask(OverlayGui, "3DRendering");
+        if OverlayGui then
+            OverlayMaid:AddTask(function()
+                if OverlayGui then
+                    OverlayGui:Destroy()
+                    OverlayGui = nil
+                end
+            end, "3DRendering");
+        end
     elseif OverlayGui then
         OverlayGui:Destroy()
         OverlayGui = nil
