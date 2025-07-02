@@ -4,7 +4,6 @@ local OverlaySystem = {};
 local OverlayMaid = Maid.new();
 local OverlayGui = nil;
 local OverlayLabels = {};
-local IsHidden = false;
 
 local function CreateOverlay()
     if OverlayGui then OverlayGui:Destroy() end
@@ -31,76 +30,115 @@ local function CreateOverlay()
     local DarkOverlay = Instance.new('Frame', OverlayGui)
     DarkOverlay.Size = UDim2.new(1, 0, 1, 0)
     DarkOverlay.BackgroundColor3 = Color3.new(0, 0, 0)
-    DarkOverlay.BackgroundTransparency = 0.3
+    DarkOverlay.BackgroundTransparency = 0.4
     DarkOverlay.BorderSizePixel = 0
     
     local Container = Instance.new('Frame', OverlayGui)
-    Container.Size = UDim2.new(0, 400, 0, 250)
-    Container.Position = UDim2.new(0.5, -200, 0.5, -125)
-    Container.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-    Container.BackgroundTransparency = 0.2
+    Container.Size = UDim2.new(0, 500, 0, 320)
+    Container.Position = UDim2.new(0.5, -250, 0.5, -160)
+    Container.BackgroundColor3 = Color3.new(0.05, 0.05, 0.05)
+    Container.BackgroundTransparency = 0.05
     Container.BorderSizePixel = 0
     
     local UICorner = Instance.new('UICorner', Container)
-    UICorner.CornerRadius = UDim.new(0, 12)
+    UICorner.CornerRadius = UDim.new(0, 20)
+    
+    local UIStroke = Instance.new('UIStroke', Container)
+    UIStroke.Color = Color3.fromRGB(138, 43, 226)
+    UIStroke.Thickness = 3
+    UIStroke.Transparency = 0.3
+    
+    local Gradient = Instance.new('UIGradient', UIStroke)
+    Gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(75, 0, 130)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(138, 43, 226))
+    }
     
     local DiscordLabel = Instance.new('TextLabel', Container)
-    DiscordLabel.Size = UDim2.new(1, 0, 0, 50)
+    DiscordLabel.Size = UDim2.new(1, 0, 0, 60)
     DiscordLabel.Position = UDim2.new(0, 0, 0, 10)
     DiscordLabel.BackgroundTransparency = 1
     DiscordLabel.Text = 'discord.gg/zekehub'
     DiscordLabel.TextColor3 = Color3.new(1, 1, 1)
-    DiscordLabel.TextScaled = true
+    DiscordLabel.TextScaled = false
+    DiscordLabel.TextSize = 36
     DiscordLabel.Font = Enum.Font.SourceSansBold
     
+    local DiscordStroke = Instance.new('UIStroke', DiscordLabel)
+    DiscordStroke.Color = Color3.new(0, 0, 0)
+    DiscordStroke.Thickness = 2
+    
     local StatsContainer = Instance.new('Frame', Container)
-    StatsContainer.Size = UDim2.new(1, -20, 1, -70)
-    StatsContainer.Position = UDim2.new(0, 10, 0, 60)
+    StatsContainer.Size = UDim2.new(1, -40, 0, 160)
+    StatsContainer.Position = UDim2.new(0, 20, 0, 80)
     StatsContainer.BackgroundTransparency = 1
     
-    local ToggleButton = Instance.new('TextButton', Container)
-    ToggleButton.Size = UDim2.new(0, 120, 0, 35)
-    ToggleButton.Position = UDim2.new(0.5, -60, 1, -45)
-    ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-    ToggleButton.Text = 'Hide'
-    ToggleButton.TextColor3 = Color3.new(1, 1, 1)
-    ToggleButton.TextScaled = true
-    ToggleButton.Font = Enum.Font.SourceSans
-    
-    local ButtonCorner = Instance.new('UICorner', ToggleButton)
-    ButtonCorner.CornerRadius = UDim.new(0, 6)
-    
-    OverlayMaid:AddTask(ToggleButton.MouseButton1Click:Connect(function()
-        Container.Visible = not Container.Visible
-        DarkOverlay.Visible = Container.Visible
-        ImageLabel.Visible = Container.Visible
-        if not Container.Visible then
-            ToggleButton.Parent = OverlayGui
-            ToggleButton.Position = UDim2.new(0.5, -60, 0.5, 0)
-            ToggleButton.Text = 'Show'
-        else
-            ToggleButton.Parent = Container
-            ToggleButton.Position = UDim2.new(0.5, -60, 1, -45)
-            ToggleButton.Text = 'Hide'
-        end
-    end), "3DRendering")
-    
     OverlayLabels = {}
-    local statTexts = {'Current Task: None', 'Bucks: 0', 'Age Potions: 0', 'Runtime: 00:00'}
-    local labelNames = {'Task', 'Bucks', 'Potions', 'Runtime'}
+    local statConfigs = {
+        {name = 'Task', text = 'Current Task: None', icon = '📋'},
+        {name = 'Bucks', text = 'Bucks: 0', icon = '💰'},
+        {name = 'Potions', text = 'Age Potions: 0', icon = '🧪'},
+        {name = 'Runtime', text = 'Runtime: 00:00', icon = '⏱️'}
+    }
     
-    for i = 1, 4 do
-        local label = Instance.new('TextLabel', StatsContainer)
-        label.Size = UDim2.new(1, 0, 0, 30)
-        label.Position = UDim2.new(0, 0, 0, (i-1) * 35)
+    for i, config in ipairs(statConfigs) do
+        local statFrame = Instance.new('Frame', StatsContainer)
+        statFrame.Size = UDim2.new(1, 0, 0, 35)
+        statFrame.Position = UDim2.new(0, 0, 0, (i-1) * 40)
+        statFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+        statFrame.BackgroundTransparency = 0.7
+        
+        local statCorner = Instance.new('UICorner', statFrame)
+        statCorner.CornerRadius = UDim.new(0, 10)
+        
+        local label = Instance.new('TextLabel', statFrame)
+        label.Size = UDim2.new(1, -10, 1, 0)
+        label.Position = UDim2.new(0, 10, 0, 0)
         label.BackgroundTransparency = 1
-        label.Text = statTexts[i]
-        label.TextColor3 = Color3.new(0.9, 0.9, 0.9)
-        label.TextScaled = true
+        label.Text = config.icon .. '  ' .. config.text
+        label.TextColor3 = Color3.new(0.95, 0.95, 0.95)
+        label.TextScaled = false
+        label.TextSize = 20
         label.Font = Enum.Font.SourceSans
         label.TextXAlignment = Enum.TextXAlignment.Left
-        OverlayLabels[labelNames[i]] = label
+        
+        OverlayLabels[config.name] = label
     end
+    
+    local ToggleButton = Instance.new('TextButton', Container)
+    ToggleButton.Size = UDim2.new(0, 200, 0, 45)
+    ToggleButton.Position = UDim2.new(0.5, -100, 1, -60)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
+    ToggleButton.Text = 'HIDE OVERLAY'
+    ToggleButton.TextColor3 = Color3.new(1, 1, 1)
+    ToggleButton.TextScaled = false
+    ToggleButton.TextSize = 18
+    ToggleButton.Font = Enum.Font.SourceSansBold
+    
+    local ButtonCorner = Instance.new('UICorner', ToggleButton)
+    ButtonCorner.CornerRadius = UDim.new(0, 12)
+    
+    local ButtonStroke = Instance.new('UIStroke', ToggleButton)
+    ButtonStroke.Color = Color3.new(0, 0, 0)
+    ButtonStroke.Thickness = 2
+    ButtonStroke.Transparency = 0.5
+    
+    OverlayMaid:AddTask(ToggleButton.MouseButton1Click:Connect(function()
+        OverlayGui.Enabled = not OverlayGui.Enabled
+    end), "3DRendering")
+    
+    OverlayMaid:AddTask(ToggleButton.MouseEnter:Connect(function()
+        game:GetService("TweenService"):Create(ToggleButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(75, 0, 130)
+        }):Play()
+    end), "3DRendering")
+    
+    OverlayMaid:AddTask(ToggleButton.MouseLeave:Connect(function()
+        game:GetService("TweenService"):Create(ToggleButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(138, 43, 226)
+        }):Play()
+    end), "3DRendering")
     
     return OverlayGui
 end
@@ -123,19 +161,13 @@ function OverlaySystem.Toggle3DRendering(enabled)
     end
 end
 
-function OverlaySystem.ToggleVisibility()
-    if not OverlayGui then return end
-    IsHidden = not IsHidden
-    OverlayGui.Enabled = not IsHidden
-end
-
 function OverlaySystem.UpdateStats(data)
     if not OverlayGui or not OverlayLabels.Task then return end
     pcall(function()
-        if data.task then OverlayLabels.Task.Text = 'Current Task: ' .. data.task end
-        if data.bucks then OverlayLabels.Bucks.Text = 'Bucks: ' .. tostring(data.bucks) end
-        if data.potions then OverlayLabels.Potions.Text = 'Age Potions: ' .. tostring(data.potions) end
-        if data.runtime then OverlayLabels.Runtime.Text = 'Runtime: ' .. data.runtime end
+        if data.task then OverlayLabels.Task.Text = '📋  Current Task: ' .. data.task end
+        if data.bucks then OverlayLabels.Bucks.Text = '💰  Bucks: ' .. tostring(data.bucks) end
+        if data.potions then OverlayLabels.Potions.Text = '🧪  Age Potions: ' .. tostring(data.potions) end
+        if data.runtime then OverlayLabels.Runtime.Text = '⏱️  Runtime: ' .. data.runtime end
     end)
 end
 
