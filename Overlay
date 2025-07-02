@@ -1,0 +1,136 @@
+local Maid = loadstring(game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Maid.lua"))();
+
+local OverlaySystem = {};
+local OverlayMaid = Maid.new();
+local OverlayGui = nil;
+local OverlayLabels = {};
+local IsHidden = false;
+
+local function CreateOverlay()
+    if OverlayGui then OverlayGui:Destroy() end
+    
+    local url = 'https://raw.githubusercontent.com/AccountBurner/Utility/main/55279d991b8a4dcb35bcd36d26fb0cb9.png'
+    local path = 'zekehub_cover.png'
+    writefile(path, game:HttpGet(url))
+    local asset = getcustomasset(path)
+    
+    OverlayGui = Instance.new('ScreenGui')
+    OverlayGui.IgnoreGuiInset = true
+    OverlayGui.ResetOnSpawn = false
+    OverlayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    OverlayGui.DisplayOrder = 10
+    OverlayGui.Parent = gethui and gethui() or game:GetService("CoreGui")
+    
+    local ImageLabel = Instance.new('ImageLabel', OverlayGui)
+    ImageLabel.Size = UDim2.new(1, 0, 1, 0)
+    ImageLabel.Position = UDim2.new(0, 0, 0, 0)
+    ImageLabel.BackgroundTransparency = 1
+    ImageLabel.Image = asset
+    ImageLabel.ScaleType = Enum.ScaleType.Stretch
+    
+    local DarkOverlay = Instance.new('Frame', OverlayGui)
+    DarkOverlay.Size = UDim2.new(1, 0, 1, 0)
+    DarkOverlay.BackgroundColor3 = Color3.new(0, 0, 0)
+    DarkOverlay.BackgroundTransparency = 0.3
+    DarkOverlay.BorderSizePixel = 0
+    
+    local Container = Instance.new('Frame', OverlayGui)
+    Container.Size = UDim2.new(0, 400, 0, 250)
+    Container.Position = UDim2.new(0.5, -200, 0.5, -125)
+    Container.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+    Container.BackgroundTransparency = 0.2
+    Container.BorderSizePixel = 0
+    
+    local UICorner = Instance.new('UICorner', Container)
+    UICorner.CornerRadius = UDim.new(0, 12)
+    
+    local DiscordLabel = Instance.new('TextLabel', Container)
+    DiscordLabel.Size = UDim2.new(1, 0, 0, 50)
+    DiscordLabel.Position = UDim2.new(0, 0, 0, 10)
+    DiscordLabel.BackgroundTransparency = 1
+    DiscordLabel.Text = 'discord.gg/zekehub'
+    DiscordLabel.TextColor3 = Color3.new(1, 1, 1)
+    DiscordLabel.TextScaled = true
+    DiscordLabel.Font = Enum.Font.SourceSansBold
+    
+    local StatsContainer = Instance.new('Frame', Container)
+    StatsContainer.Size = UDim2.new(1, -20, 1, -70)
+    StatsContainer.Position = UDim2.new(0, 10, 0, 60)
+    StatsContainer.BackgroundTransparency = 1
+    
+    local ToggleButton = Instance.new('TextButton', OverlayGui)
+    ToggleButton.Size = UDim2.new(0, 100, 0, 30)
+    ToggleButton.Position = UDim2.new(1, -110, 0, 10)
+    ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+    ToggleButton.Text = 'Hide'
+    ToggleButton.TextColor3 = Color3.new(1, 1, 1)
+    ToggleButton.TextScaled = true
+    ToggleButton.Font = Enum.Font.SourceSans
+    
+    local ButtonCorner = Instance.new('UICorner', ToggleButton)
+    ButtonCorner.CornerRadius = UDim.new(0, 6)
+    
+    OverlayMaid:AddTask(ToggleButton.MouseButton1Click:Connect(function()
+        Container.Visible = not Container.Visible
+        DarkOverlay.Visible = Container.Visible
+        ImageLabel.Visible = Container.Visible
+        ToggleButton.Text = Container.Visible and 'Hide' or 'Show'
+    end), "3DRendering")
+    
+    OverlayLabels = {}
+    local statTexts = {'Current Task: None', 'Bucks: 0', 'Age Potions: 0', 'Runtime: 00:00:00'}
+    local labelNames = {'Task', 'Bucks', 'Potions', 'Runtime'}
+    
+    for i = 1, 4 do
+        local label = Instance.new('TextLabel', StatsContainer)
+        label.Size = UDim2.new(1, 0, 0, 30)
+        label.Position = UDim2.new(0, 0, 0, (i-1) * 35)
+        label.BackgroundTransparency = 1
+        label.Text = statTexts[i]
+        label.TextColor3 = Color3.new(0.9, 0.9, 0.9)
+        label.TextScaled = true
+        label.Font = Enum.Font.SourceSans
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        OverlayLabels[labelNames[i]] = label
+    end
+    
+    return OverlayGui
+end
+
+function OverlaySystem.Toggle3DRendering(enabled)
+    OverlayMaid:Cleanup("3DRendering");
+    game:GetService("RunService"):Set3dRenderingEnabled(not enabled)
+    if enabled then
+        CreateOverlay()
+        OverlayMaid:AddTask(OverlayGui, "3DRendering");
+    elseif OverlayGui then
+        OverlayGui:Destroy()
+        OverlayGui = nil
+    end
+end
+
+function OverlaySystem.ToggleVisibility()
+    if not OverlayGui then return end
+    IsHidden = not IsHidden
+    OverlayGui.Enabled = not IsHidden
+end
+
+function OverlaySystem.UpdateStats(data)
+    if not OverlayGui or not OverlayLabels.Task then return end
+    pcall(function()
+        if data.task then OverlayLabels.Task.Text = 'Current Task: ' .. data.task end
+        if data.bucks then OverlayLabels.Bucks.Text = 'Bucks: ' .. tostring(data.bucks) end
+        if data.potions then OverlayLabels.Potions.Text = 'Age Potions: ' .. tostring(data.potions) end
+        if data.runtime then OverlayLabels.Runtime.Text = 'Runtime: ' .. data.runtime end
+    end)
+end
+
+function OverlaySystem.Destroy()
+    OverlayMaid:Cleanup();
+    if OverlayGui then
+        OverlayGui:Destroy()
+        OverlayGui = nil
+    end
+end
+
+return OverlaySystem;
