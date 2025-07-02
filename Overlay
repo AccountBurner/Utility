@@ -58,9 +58,9 @@ local function CreateOverlay()
     StatsContainer.Position = UDim2.new(0, 10, 0, 60)
     StatsContainer.BackgroundTransparency = 1
     
-    local ToggleButton = Instance.new('TextButton', OverlayGui)
-    ToggleButton.Size = UDim2.new(0, 100, 0, 30)
-    ToggleButton.Position = UDim2.new(1, -110, 0, 10)
+    local ToggleButton = Instance.new('TextButton', Container)
+    ToggleButton.Size = UDim2.new(0, 80, 0, 25)
+    ToggleButton.Position = UDim2.new(0.5, -40, 1, -35)
     ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
     ToggleButton.Text = 'Hide'
     ToggleButton.TextColor3 = Color3.new(1, 1, 1)
@@ -74,11 +74,19 @@ local function CreateOverlay()
         Container.Visible = not Container.Visible
         DarkOverlay.Visible = Container.Visible
         ImageLabel.Visible = Container.Visible
-        ToggleButton.Text = Container.Visible and 'Hide' or 'Show'
+        if not Container.Visible then
+            ToggleButton.Parent = OverlayGui
+            ToggleButton.Position = UDim2.new(0.5, -40, 0.5, 0)
+            ToggleButton.Text = 'Show'
+        else
+            ToggleButton.Parent = Container
+            ToggleButton.Position = UDim2.new(0.5, -40, 1, -35)
+            ToggleButton.Text = 'Hide'
+        end
     end), "3DRendering")
     
     OverlayLabels = {}
-    local statTexts = {'Current Task: None', 'Bucks: 0', 'Age Potions: 0', 'Runtime: 00:00:00'}
+    local statTexts = {'Current Task: None', 'Bucks: 0', 'Age Potions: 0', 'Runtime: 00:00'}
     local labelNames = {'Task', 'Bucks', 'Potions', 'Runtime'}
     
     for i = 1, 4 do
@@ -99,7 +107,6 @@ end
 
 function OverlaySystem.Toggle3DRendering(enabled)
     OverlayMaid:Cleanup("3DRendering");
-    game:GetService("RunService"):Set3dRenderingEnabled(not enabled)
     if enabled then
         CreateOverlay()
         OverlayMaid:AddTask(OverlayGui, "3DRendering");
