@@ -126,7 +126,7 @@ local function CreateOverlay()
     
     local ShowButton = Instance.new('TextButton', OverlayGui)
     ShowButton.Size = UDim2.new(0, 200, 0, 45)
-    ShowButton.Position = UDim2.new(0.5, -100, 1, -100)
+    ShowButton.Position = UDim2.new(0.5, -100, 1, -120)
     ShowButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
     ShowButton.BackgroundTransparency = 0.6
     ShowButton.Text = 'SHOW OVERLAY'
