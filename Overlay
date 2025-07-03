@@ -177,17 +177,22 @@ function OverlaySystem.Toggle3DRendering(enabled)
     OverlayMaid:Cleanup("3DRendering");
     if enabled then
         CreateOverlay()
+        game:GetService("RunService"):Set3dRenderingEnabled(false);
         if OverlayGui then
             OverlayMaid:AddTask(function()
                 if OverlayGui then
                     OverlayGui:Destroy()
                     OverlayGui = nil
                 end
+                game:GetService("RunService"):Set3dRenderingEnabled(true);
             end, "3DRendering");
         end
-    elseif OverlayGui then
-        OverlayGui:Destroy()
-        OverlayGui = nil
+    else
+        if OverlayGui then
+            OverlayGui:Destroy()
+            OverlayGui = nil
+        end
+        game:GetService("RunService"):Set3dRenderingEnabled(true);
     end
 end
 
