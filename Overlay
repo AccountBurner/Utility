@@ -6,17 +6,37 @@ local OverlayGui = nil;
 local OverlayLabels = {};
 local LastUpdate = 0;
 local UpdateQueue = {};
+local SafeExecute = nil;
+
+function OverlaySystem.SetSafeExecute(func)
+    SafeExecute = func
+end
 
 local function CreateOverlay()
-    if OverlayGui then OverlayGui:Destroy() end
-    
-    local url = 'https://raw.githubusercontent.com/AccountBurner/Utility/main/55279d991b8a4dcb35bcd36d26fb0cb9.png'
-    local path = 'zekehub_cover.png'
-    
-    if not isfile(path) then
-        writefile(path, game:HttpGet(url))
+    if not SafeExecute then
+        SafeExecute = function(level, func, ...)
+            local old = getthreadidentity and getthreadidentity() or 7
+            setthreadidentity(level)
+            local results = {pcall(func, ...)}
+            setthreadidentity(old)
+            if not results[1] then
+                warn("[SafeExecute Error]:", results[2])
+                return nil
+            end
+            return table.unpack(results, 2)
+        end
     end
-    local asset = getcustomasset(path)
+    
+    SafeExecute(7, function()
+        if OverlayGui then OverlayGui:Destroy() end
+        
+        local url = 'https://raw.githubusercontent.com/AccountBurner/Utility/main/55279d991b8a4dcb35bcd36d26fb0cb9.png'
+        local path = 'zekehub_cover.png'
+        
+        if not isfile(path) then
+            writefile(path, game:HttpGet(url))
+        end
+        local asset = getcustomasset(path)
     
     OverlayGui = Instance.new('ScreenGui')
     OverlayGui.IgnoreGuiInset = true
@@ -150,19 +170,23 @@ local function CreateOverlay()
     ShowButtonStroke.Transparency = 0.7
     
     OverlayMaid:AddTask(ToggleButton.MouseButton1Click:Connect(function()
-        Container.Visible = false
-        DarkOverlay.Visible = false
-        ImageLabel.Visible = false
-        ShowButton.Visible = false
-        game:GetService("RunService"):Set3dRenderingEnabled(true);
+        task.spawn(function()
+            Container.Visible = false
+            DarkOverlay.Visible = false
+            ImageLabel.Visible = false
+            ShowButton.Visible = false
+            game:GetService("RunService"):Set3dRenderingEnabled(true);
+        end)
     end), "3DRendering")
     
     OverlayMaid:AddTask(ShowButton.MouseButton1Click:Connect(function()
-        Container.Visible = true
-        DarkOverlay.Visible = true
-        ImageLabel.Visible = true
-        ShowButton.Visible = false
-        game:GetService("RunService"):Set3dRenderingEnabled(false);
+        task.spawn(function()
+            Container.Visible = true
+            DarkOverlay.Visible = true
+            ImageLabel.Visible = true
+            ShowButton.Visible = false
+            game:GetService("RunService"):Set3dRenderingEnabled(false);
+        end)
     end), "3DRendering")
     
     OverlayMaid:AddTask(ToggleButton.MouseEnter:Connect(function()
@@ -195,7 +219,7 @@ local function CreateOverlay()
 end
 
 function OverlaySystem.Toggle3DRendering(enabled)
-    task.spawn(function()
+    SafeExecute(7, function()
         OverlayMaid:Cleanup("3DRendering");
         if enabled then
             CreateOverlay()
@@ -205,7 +229,7 @@ function OverlaySystem.Toggle3DRendering(enabled)
             
             if OverlayGui then
                 OverlayMaid:AddTask(function()
-                    task.spawn(function()
+                    SafeExecute(7, function()
                         if OverlayGui then
                             OverlayGui:Destroy()
                             OverlayGui = nil
@@ -215,7 +239,7 @@ function OverlaySystem.Toggle3DRendering(enabled)
                 end, "3DRendering");
             end
         else
-            task.spawn(function()
+            SafeExecute(7, function()
                 if OverlayGui then
                     OverlayGui:Destroy()
                     OverlayGui = nil
@@ -236,7 +260,7 @@ function OverlaySystem.UpdateStats(data)
 end
 
 function OverlaySystem.Destroy()
-    task.spawn(function()
+    SafeExecute(7, function()
         OverlayMaid:Cleanup();
         if OverlayGui then
             OverlayGui:Destroy()
