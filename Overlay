@@ -153,7 +153,8 @@ local function CreateOverlay()
         Container.Visible = false
         DarkOverlay.Visible = false
         ImageLabel.Visible = false
-        ShowButton.Visible = true
+        ShowButton.Visible = false
+        game:GetService("RunService"):Set3dRenderingEnabled(true);
     end), "3DRendering")
     
     OverlayMaid:AddTask(ShowButton.MouseButton1Click:Connect(function()
@@ -161,6 +162,7 @@ local function CreateOverlay()
         DarkOverlay.Visible = true
         ImageLabel.Visible = true
         ShowButton.Visible = false
+        game:GetService("RunService"):Set3dRenderingEnabled(false);
     end), "3DRendering")
     
     OverlayMaid:AddTask(ToggleButton.MouseEnter:Connect(function()
