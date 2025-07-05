@@ -195,29 +195,35 @@ local function CreateOverlay()
 end
 
 function OverlaySystem.Toggle3DRendering(enabled)
-    OverlayMaid:Cleanup("3DRendering");
-    if enabled then
-        CreateOverlay()
-        
-        task.wait(0.1)
-        game:GetService("RunService"):Set3dRenderingEnabled(false);
-        
-        if OverlayGui then
-            OverlayMaid:AddTask(function()
+    task.spawn(function()
+        OverlayMaid:Cleanup("3DRendering");
+        if enabled then
+            CreateOverlay()
+            
+            task.wait(0.1)
+            game:GetService("RunService"):Set3dRenderingEnabled(false);
+            
+            if OverlayGui then
+                OverlayMaid:AddTask(function()
+                    task.spawn(function()
+                        if OverlayGui then
+                            OverlayGui:Destroy()
+                            OverlayGui = nil
+                        end
+                        game:GetService("RunService"):Set3dRenderingEnabled(true);
+                    end)
+                end, "3DRendering");
+            end
+        else
+            task.spawn(function()
                 if OverlayGui then
                     OverlayGui:Destroy()
                     OverlayGui = nil
                 end
                 game:GetService("RunService"):Set3dRenderingEnabled(true);
-            end, "3DRendering");
+            end)
         end
-    else
-        if OverlayGui then
-            OverlayGui:Destroy()
-            OverlayGui = nil
-        end
-        game:GetService("RunService"):Set3dRenderingEnabled(true);
-    end
+    end)
 end
 
 function OverlaySystem.UpdateStats(data)
@@ -230,12 +236,14 @@ function OverlaySystem.UpdateStats(data)
 end
 
 function OverlaySystem.Destroy()
-    OverlayMaid:Cleanup();
-    if OverlayGui then
-        OverlayGui:Destroy()
-        OverlayGui = nil
-    end
-    UpdateQueue = {}
+    task.spawn(function()
+        OverlayMaid:Cleanup();
+        if OverlayGui then
+            OverlayGui:Destroy()
+            OverlayGui = nil
+        end
+        UpdateQueue = {}
+    end)
 end
 
 return OverlaySystem;
