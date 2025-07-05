@@ -4,13 +4,18 @@ local OverlaySystem = {};
 local OverlayMaid = Maid.new();
 local OverlayGui = nil;
 local OverlayLabels = {};
+local LastUpdate = 0;
+local UpdateQueue = {};
 
 local function CreateOverlay()
     if OverlayGui then OverlayGui:Destroy() end
     
     local url = 'https://raw.githubusercontent.com/AccountBurner/Utility/main/55279d991b8a4dcb35bcd36d26fb0cb9.png'
     local path = 'zekehub_cover.png'
-    writefile(path, game:HttpGet(url))
+    
+    if not isfile(path) then
+        writefile(path, game:HttpGet(url))
+    end
     local asset = getcustomasset(path)
     
     OverlayGui = Instance.new('ScreenGui')
@@ -170,6 +175,20 @@ local function CreateOverlay()
         }):Play()
     end), "3DRendering")
     
+    OverlayMaid:AddTask(game:GetService("RunService").Heartbeat:Connect(function()
+        if tick() - LastUpdate < 0.5 then return end
+        LastUpdate = tick()
+        
+        if next(UpdateQueue) then
+            for key, value in pairs(UpdateQueue) do
+                if OverlayLabels[key] then
+                    OverlayLabels[key].Text = value
+                end
+            end
+            UpdateQueue = {}
+        end
+    end), "3DRendering")
+    
     return OverlayGui
 end
 
@@ -177,7 +196,10 @@ function OverlaySystem.Toggle3DRendering(enabled)
     OverlayMaid:Cleanup("3DRendering");
     if enabled then
         CreateOverlay()
+        
+        task.wait(0.1)
         game:GetService("RunService"):Set3dRenderingEnabled(false);
+        
         if OverlayGui then
             OverlayMaid:AddTask(function()
                 if OverlayGui then
@@ -197,13 +219,12 @@ function OverlaySystem.Toggle3DRendering(enabled)
 end
 
 function OverlaySystem.UpdateStats(data)
-    if not OverlayGui or not OverlayLabels.Task then return end
-    pcall(function()
-        if data.task then OverlayLabels.Task.Text = '📋  Current Task: ' .. data.task end
-        if data.bucks then OverlayLabels.Bucks.Text = '💰  Bucks: ' .. tostring(data.bucks) end
-        if data.potions then OverlayLabels.Potions.Text = '🧪  Age Potions: ' .. tostring(data.potions) end
-        if data.runtime then OverlayLabels.Runtime.Text = '⏱️  Runtime: ' .. data.runtime end
-    end)
+    if not OverlayGui then return end
+    
+    if data.task then UpdateQueue.Task = '📋  Current Task: ' .. data.task end
+    if data.bucks then UpdateQueue.Bucks = '💰  Bucks: ' .. tostring(data.bucks) end
+    if data.potions then UpdateQueue.Potions = '🧪  Age Potions: ' .. tostring(data.potions) end
+    if data.runtime then UpdateQueue.Runtime = '⏱️  Runtime: ' .. data.runtime end
 end
 
 function OverlaySystem.Destroy()
@@ -212,6 +233,7 @@ function OverlaySystem.Destroy()
         OverlayGui:Destroy()
         OverlayGui = nil
     end
+    UpdateQueue = {}
 end
 
 return OverlaySystem;
