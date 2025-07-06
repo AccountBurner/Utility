@@ -149,18 +149,20 @@ local function CreateOverlay()
     ShowButtonStroke.Thickness = 2
     ShowButtonStroke.Transparency = 0.7
     
-    OverlayMaid:AddTask(ToggleButton.MouseButton1Click:Connect(function()
+   OverlayMaid:AddTask(ToggleButton.MouseButton1Click:Connect(function()
         Container.Visible = false
         DarkOverlay.Visible = false
         ImageLabel.Visible = false
         ShowButton.Visible = true
+        game:GetService("RunService"):Set3dRenderingEnabled(true);
     end), "3DRendering")
     
-    OverlayMaid:AddTask(ShowButton.MouseButton1Click:Connect(function()
+     OverlayMaid:AddTask(ShowButton.MouseButton1Click:Connect(function()
         Container.Visible = true
         DarkOverlay.Visible = true
         ImageLabel.Visible = true
         ShowButton.Visible = false
+        game:GetService("RunService"):Set3dRenderingEnabled(false);
     end), "3DRendering")
     
     OverlayMaid:AddTask(ToggleButton.MouseEnter:Connect(function()
