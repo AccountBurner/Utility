@@ -84,7 +84,8 @@ local function CreateOverlay()
         {name = 'Task', text = 'Current Task: None', icon = '📋'},
         {name = 'Bucks', text = 'Bucks: 0', icon = '💰'},
         {name = 'Potions', text = 'Age Potions: 0', icon = '🧪'},
-        {name = 'Runtime', text = 'Runtime: 00:00', icon = '⏱️'}
+        {name = 'Runtime', text = 'Runtime: 00:00', icon = '⏱️'},
+        {name = 'Location', text = 'Location: Unknown', icon = '📍'}
     }
     
     for i, config in ipairs(statConfigs) do
@@ -227,6 +228,7 @@ function OverlaySystem.UpdateStats(data)
     if data.bucks then UpdateQueue.Bucks = '💰  Bucks: ' .. tostring(data.bucks) end
     if data.potions then UpdateQueue.Potions = '🧪  Age Potions: ' .. tostring(data.potions) end
     if data.runtime then UpdateQueue.Runtime = '⏱️  Runtime: ' .. data.runtime end
+    if data.location then UpdateQueue.Location = '📍  Location: ' .. data.location end
 end
 
 function OverlaySystem.Destroy()
