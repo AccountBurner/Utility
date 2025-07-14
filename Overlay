@@ -177,21 +177,6 @@ local function CreateOverlay()
             BackgroundColor3 = Color3.fromRGB(138, 43, 226)
         }):Play()
     end), "3DRendering")
-    
-    OverlayMaid:AddTask(game:GetService("RunService").Heartbeat:Connect(function()
-        if tick() - LastUpdate < 0.5 then return end
-        LastUpdate = tick()
-        
-        if next(UpdateQueue) then
-            for key, value in pairs(UpdateQueue) do
-                if OverlayLabels[key] then
-                    OverlayLabels[key].Text = value
-                end
-            end
-            UpdateQueue = {}
-        end
-    end), "3DRendering")
-    
     return OverlayGui
 end
 
@@ -224,11 +209,21 @@ end
 function OverlaySystem.UpdateStats(data)
     if not OverlayGui then return end
     
-    if data.task then UpdateQueue.Task = '📋  Current Task: ' .. data.task end
-    if data.bucks then UpdateQueue.Bucks = '💰  Bucks: ' .. tostring(data.bucks) end
-    if data.potions then UpdateQueue.Potions = '🧪  Age Potions: ' .. tostring(data.potions) end
-    if data.runtime then UpdateQueue.Runtime = '⏱️  Runtime: ' .. data.runtime end
-    if data.location then UpdateQueue.Location = '📍  Location: ' .. data.location end
+    if data.task and OverlayLabels.Task then
+        OverlayLabels.Task.Text = '📋  Current Task: ' .. data.task
+    end
+    if data.bucks and OverlayLabels.Bucks then
+        OverlayLabels.Bucks.Text = '💰  Bucks: ' .. tostring(data.bucks)
+    end
+    if data.potions and OverlayLabels.Potions then
+        OverlayLabels.Potions.Text = '🧪  Age Potions: ' .. tostring(data.potions)
+    end
+    if data.runtime and OverlayLabels.Runtime then
+        OverlayLabels.Runtime.Text = '⏱️  Runtime: ' .. data.runtime
+    end
+    if data.location and OverlayLabels.Location then
+        OverlayLabels.Location.Text = '📍  Location: ' .. data.location
+    end
 end
 
 function OverlaySystem.Destroy()
