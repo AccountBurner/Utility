@@ -110,6 +110,7 @@ local function rotateVector(vector, radians)
     local c, s = cos(radians), sin(radians);
     return Vector2.new(c*vector.X - s*vector.Y, s*vector.X + c*vector.Y);
 end
+local b=function(x) return x and true or false end;
 
 -- ESP Object
 local EspObject = {};
@@ -880,6 +881,8 @@ function InstanceEspObject:Render()
     -- Weapon ESP
     visible.weapon.Visible = enabled and onScreen and options.weapon;
     if visible.weapon.Visible then
+        pcall(function()
+            visible.weapon.Text = self.interface.getWeapon(self.instance) or "Unknown";
         local weapon = visible.weapon;
         weapon.Text = options.weaponText or "Unknown";
         weapon.Size = interface.sharedSettings.textSize;
@@ -891,6 +894,7 @@ function InstanceEspObject:Render()
         weapon.Position =
             (corners.bottomLeft + corners.bottomRight)*0.5 +
             (visible.distance.Visible and DISTANCE_OFFSET + Vector2.yAxis*visible.distance.TextBounds.Y or Vector2.zero);
+        end);
     end
 
     -- Off-screen arrow
