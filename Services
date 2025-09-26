@@ -1,13 +1,13 @@
-local Services = {}
-local vim = getvirtualinputmanager and getvirtualinputmanager()
+local Services = {};
+local vim = Instance.new("VirtualInputManager");
 
 function Services:Get(...)
     local allServices = {}
-    for _, service in next, {...} do
-        table.insert(allServices, self[service])
-    end
-    return unpack(allServices)
-end
+    for _, service in next, {...} do;
+        table.insert(allServices, self[service]);
+    end;
+    return unpack(allServices);
+end;
 
 setmetatable(Services, {
     __index = function(self, p)
@@ -16,10 +16,10 @@ setmetatable(Services, {
         elseif p == "CurrentCamera" then
             return workspace.CurrentCamera
         end
-        local service = game:GetService(p)
-        rawset(self, p, service)
-        return rawget(self, p)
+        local service = game:GetService(p);
+        rawset(self, p, service);
+        return rawget(self, p);
     end
 })
 
-return Services
+return Services;
