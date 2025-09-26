@@ -1,9 +1,9 @@
 local Services = {};
-local vim = Instance.new("VirtualInputManager");
+local vim = getvirtualinputmanager and getvirtualinputmanager();
 
 function Services:Get(...)
     local allServices = {}
-    for _, service in next, {...} do;
+    for _, service in next, {...} do
         table.insert(allServices, self[service]);
     end;
     return unpack(allServices);
@@ -18,7 +18,7 @@ setmetatable(Services, {
         end
         local service = game:GetService(p);
         rawset(self, p, service);
-        return rawget(self, p);
+        return service;
     end
 })
 
