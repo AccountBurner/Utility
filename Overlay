@@ -39,8 +39,8 @@ local function CreateOverlay()
     DarkOverlay.BorderSizePixel = 0
     
     local Container = Instance.new('Frame', OverlayGui)
-    Container.Size = UDim2.new(0, 500, 0, 360)
-    Container.Position = UDim2.new(0.5, -250, 0.5, -180)
+    Container.Size = UDim2.new(0, 500, 0, 480)
+    Container.Position = UDim2.new(0.5, -250, 0.5, -240)
     Container.BackgroundColor3 = Color3.new(0.05, 0.05, 0.05)
     Container.BackgroundTransparency = 0.05
     Container.BorderSizePixel = 0
@@ -75,7 +75,7 @@ local function CreateOverlay()
     DiscordStroke.Thickness = 2
     
     local StatsContainer = Instance.new('Frame', Container)
-    StatsContainer.Size = UDim2.new(1, -40, 0, 200)
+    StatsContainer.Size = UDim2.new(1, -40, 0, 280)
     StatsContainer.Position = UDim2.new(0, 20, 0, 80)
     StatsContainer.BackgroundTransparency = 1
     
@@ -85,7 +85,9 @@ local function CreateOverlay()
         {name = 'Bucks', text = 'Bucks: 0', icon = '💰'},
         {name = 'Potions', text = 'Age Potions: 0', icon = '🧪'},
         {name = 'Runtime', text = 'Runtime: 00:00', icon = '⏱️'},
-        {name = 'Location', text = 'Location: Unknown', icon = '📍'}
+        {name = 'Location', text = 'Location: Unknown', icon = '📍'},
+        {name = 'EventCurrency', text = 'Event Currency: 0', icon = '🎃'},
+        {name = 'YarnApples', text = 'Yarn Apples: 0', icon = '🧶'}
     }
     
     for i, config in ipairs(statConfigs) do
@@ -150,7 +152,7 @@ local function CreateOverlay()
     ShowButtonStroke.Thickness = 2
     ShowButtonStroke.Transparency = 0.7
     
-   OverlayMaid:AddTask(ToggleButton.MouseButton1Click:Connect(function()
+    OverlayMaid:AddTask(ToggleButton.MouseButton1Click:Connect(function()
         Container.Visible = false
         DarkOverlay.Visible = false
         ImageLabel.Visible = false
@@ -158,7 +160,7 @@ local function CreateOverlay()
         game:GetService("RunService"):Set3dRenderingEnabled(true);
     end), "3DRendering")
     
-     OverlayMaid:AddTask(ShowButton.MouseButton1Click:Connect(function()
+    OverlayMaid:AddTask(ShowButton.MouseButton1Click:Connect(function()
         Container.Visible = true
         DarkOverlay.Visible = true
         ImageLabel.Visible = true
@@ -223,6 +225,12 @@ function OverlaySystem.UpdateStats(data)
     end
     if data.location and OverlayLabels.Location then
         OverlayLabels.Location.Text = '📍  Location: ' .. data.location
+    end
+    if data.eventCurrency and OverlayLabels.EventCurrency then
+        OverlayLabels.EventCurrency.Text = '🎃  Event Currency: ' .. tostring(data.eventCurrency)
+    end
+    if data.yarnApples and OverlayLabels.YarnApples then
+        OverlayLabels.YarnApples.Text = '🧶  Yarn Apples: ' .. tostring(data.yarnApples)
     end
 end
 
