@@ -4,82 +4,123 @@ local OverlaySystem = {};
 local OverlayMaid = Maid.new();
 local OverlayGui = nil;
 local OverlayLabels = {};
-local LastUpdate = 0;
-local UpdateQueue = {};
+local CachedAsset = nil;
+local OriginalSettings = {};
 
-local function CreateOverlay()
-    if OverlayGui then OverlayGui:Destroy() end
+local function GetOrCreateAsset()
+    if CachedAsset then return CachedAsset; end;
     
-    local url = 'https://raw.githubusercontent.com/AccountBurner/Utility/main/55279d991b8a4dcb35bcd36d26fb0cb9.png'
-    local path = 'zekehub_cover.png'
+    local url = 'https://raw.githubusercontent.com/AccountBurner/Utility/main/55279d991b8a4dcb35bcd36d26fb0cb9.png';
+    local path = 'zekehub_cover.png';
     
     if not isfile(path) then
-        writefile(path, game:HttpGet(url))
-    end
-    local asset = getcustomasset(path)
+        writefile(path, game:HttpGet(url));
+    end;
     
-    OverlayGui = Instance.new('ScreenGui')
-    OverlayGui.IgnoreGuiInset = true
-    OverlayGui.ResetOnSpawn = false
-    OverlayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    OverlayGui.DisplayOrder = 10
-    OverlayGui.Parent = gethui and gethui() or game:GetService("CoreGui")
+    CachedAsset = getcustomasset(path);
+    return CachedAsset;
+end;
+
+local function ApplyPerformanceSettings(enable)
+    local Lighting = game:GetService("Lighting");
     
-    local ImageLabel = Instance.new('ImageLabel', OverlayGui)
-    ImageLabel.Size = UDim2.new(1, 0, 1, 0)
-    ImageLabel.Position = UDim2.new(0, 0, 0, 0)
-    ImageLabel.BackgroundTransparency = 1
-    ImageLabel.Image = asset
-    ImageLabel.ScaleType = Enum.ScaleType.Stretch
+    if enable then
+        OriginalSettings = {
+            QualityLevel = settings().Rendering.QualityLevel,
+            MeshPartDetailLevel = settings().Rendering.MeshPartDetailLevel,
+            GlobalShadows = Lighting.GlobalShadows,
+            Technology = Lighting.Technology
+        };
+        
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01;
+        settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level01;
+        Lighting.GlobalShadows = false;
+        Lighting.Technology = Enum.Technology.Compatibility;
+    else
+        if OriginalSettings.QualityLevel then
+            settings().Rendering.QualityLevel = OriginalSettings.QualityLevel;
+            settings().Rendering.MeshPartDetailLevel = OriginalSettings.MeshPartDetailLevel;
+            Lighting.GlobalShadows = OriginalSettings.GlobalShadows;
+            Lighting.Technology = OriginalSettings.Technology;
+        end;
+        OriginalSettings = {};
+    end;
+end;
+
+local function CreateOverlay()
+    if OverlayGui then 
+        OverlayGui:Destroy();
+        OverlayGui = nil;
+    end;
     
-    local DarkOverlay = Instance.new('Frame', OverlayGui)
-    DarkOverlay.Size = UDim2.new(1, 0, 1, 0)
-    DarkOverlay.BackgroundColor3 = Color3.new(0, 0, 0)
-    DarkOverlay.BackgroundTransparency = 0.4
-    DarkOverlay.BorderSizePixel = 0
+    OverlayMaid:Cleanup("Overlay");
     
-    local Container = Instance.new('Frame', OverlayGui)
-    Container.Size = UDim2.new(0, 450, 0, 400)
-    Container.Position = UDim2.new(0.5, -225, 0.5, -200)
-    Container.BackgroundColor3 = Color3.new(0.05, 0.05, 0.05)
-    Container.BackgroundTransparency = 0.05
-    Container.BorderSizePixel = 0
+    local asset = GetOrCreateAsset();
     
-    local UICorner = Instance.new('UICorner', Container)
-    UICorner.CornerRadius = UDim.new(0, 16)
+    OverlayGui = Instance.new('ScreenGui');
+    OverlayGui.IgnoreGuiInset = true;
+    OverlayGui.ResetOnSpawn = false;
+    OverlayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
+    OverlayGui.DisplayOrder = 10;
+    OverlayGui.Parent = gethui and gethui() or game:GetService("CoreGui");
     
-    local UIStroke = Instance.new('UIStroke', Container)
-    UIStroke.Color = Color3.fromRGB(138, 43, 226)
-    UIStroke.Thickness = 2.5
-    UIStroke.Transparency = 0.3
+    OverlayMaid:AddTask(OverlayGui, "Overlay");
     
-    local Gradient = Instance.new('UIGradient', UIStroke)
+    local ImageLabel = Instance.new('ImageLabel', OverlayGui);
+    ImageLabel.Size = UDim2.new(1, 0, 1, 0);
+    ImageLabel.Position = UDim2.new(0, 0, 0, 0);
+    ImageLabel.BackgroundTransparency = 1;
+    ImageLabel.Image = asset;
+    ImageLabel.ScaleType = Enum.ScaleType.Stretch;
+    
+    local DarkOverlay = Instance.new('Frame', OverlayGui);
+    DarkOverlay.Size = UDim2.new(1, 0, 1, 0);
+    DarkOverlay.BackgroundColor3 = Color3.new(0, 0, 0);
+    DarkOverlay.BackgroundTransparency = 0.4;
+    DarkOverlay.BorderSizePixel = 0;
+    
+    local Container = Instance.new('Frame', OverlayGui);
+    Container.Size = UDim2.new(0, 450, 0, 400);
+    Container.Position = UDim2.new(0.5, -225, 0.5, -200);
+    Container.BackgroundColor3 = Color3.new(0.05, 0.05, 0.05);
+    Container.BackgroundTransparency = 0.05;
+    Container.BorderSizePixel = 0;
+    
+    local UICorner = Instance.new('UICorner', Container);
+    UICorner.CornerRadius = UDim.new(0, 16);
+    
+    local UIStroke = Instance.new('UIStroke', Container);
+    UIStroke.Color = Color3.fromRGB(138, 43, 226);
+    UIStroke.Thickness = 2.5;
+    UIStroke.Transparency = 0.3;
+    
+    local Gradient = Instance.new('UIGradient', UIStroke);
     Gradient.Color = ColorSequence.new{
         ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
         ColorSequenceKeypoint.new(0.5, Color3.fromRGB(75, 0, 130)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(138, 43, 226))
-    }
+    };
     
-    local DiscordLabel = Instance.new('TextLabel', Container)
-    DiscordLabel.Size = UDim2.new(1, 0, 0, 45)
-    DiscordLabel.Position = UDim2.new(0, 0, 0, 8)
-    DiscordLabel.BackgroundTransparency = 1
-    DiscordLabel.Text = 'discord.gg/zekehub'
-    DiscordLabel.TextColor3 = Color3.new(1, 1, 1)
-    DiscordLabel.TextScaled = false
-    DiscordLabel.TextSize = 28
-    DiscordLabel.Font = Enum.Font.SourceSansBold
+    local DiscordLabel = Instance.new('TextLabel', Container);
+    DiscordLabel.Size = UDim2.new(1, 0, 0, 45);
+    DiscordLabel.Position = UDim2.new(0, 0, 0, 8);
+    DiscordLabel.BackgroundTransparency = 1;
+    DiscordLabel.Text = 'discord.gg/zekehub';
+    DiscordLabel.TextColor3 = Color3.new(1, 1, 1);
+    DiscordLabel.TextScaled = false;
+    DiscordLabel.TextSize = 28;
+    DiscordLabel.Font = Enum.Font.SourceSansBold;
     
-    local DiscordStroke = Instance.new('UIStroke', DiscordLabel)
-    DiscordStroke.Color = Color3.new(0, 0, 0)
-    DiscordStroke.Thickness = 2
+    local DiscordStroke = Instance.new('UIStroke', DiscordLabel);
+    DiscordStroke.Color = Color3.new(0, 0, 0);
+    DiscordStroke.Thickness = 2;
     
-    local StatsContainer = Instance.new('Frame', Container)
-    StatsContainer.Size = UDim2.new(1, -30, 0, 270)
-    StatsContainer.Position = UDim2.new(0, 15, 0, 60)
-    StatsContainer.BackgroundTransparency = 1
+    local StatsContainer = Instance.new('Frame', Container);
+    StatsContainer.Size = UDim2.new(1, -30, 0, 270);
+    StatsContainer.Position = UDim2.new(0, 15, 0, 60);
+    StatsContainer.BackgroundTransparency = 1;
     
-    OverlayLabels = {}
+    OverlayLabels = {};
     local statConfigs = {
         {name = 'Task', text = 'Current Task: None', icon = '📋'},
         {name = 'Bucks', text = 'Bucks: 0', icon = '💰'},
@@ -89,162 +130,156 @@ local function CreateOverlay()
         {name = 'EventCurrency', text = 'Event Currency: 0', icon = '🎃'},
         {name = 'YarnApples', text = 'Yarn Apples: 0', icon = '🧶'},
         {name = 'CatBatProgress', text = 'Cat Bat: 0%', icon = '🦇'}
-    }
+    };
     
     for i, config in ipairs(statConfigs) do
-        local statFrame = Instance.new('Frame', StatsContainer)
-        statFrame.Size = UDim2.new(1, 0, 0, 30)
-        statFrame.Position = UDim2.new(0, 0, 0, (i-1) * 34)
-        statFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-        statFrame.BackgroundTransparency = 0.7
+        local statFrame = Instance.new('Frame', StatsContainer);
+        statFrame.Size = UDim2.new(1, 0, 0, 30);
+        statFrame.Position = UDim2.new(0, 0, 0, (i-1) * 34);
+        statFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1);
+        statFrame.BackgroundTransparency = 0.7;
         
-        local statCorner = Instance.new('UICorner', statFrame)
-        statCorner.CornerRadius = UDim.new(0, 8)
+        local statCorner = Instance.new('UICorner', statFrame);
+        statCorner.CornerRadius = UDim.new(0, 8);
         
-        local label = Instance.new('TextLabel', statFrame)
-        label.Size = UDim2.new(1, -10, 1, 0)
-        label.Position = UDim2.new(0, 10, 0, 0)
-        label.BackgroundTransparency = 1
-        label.Text = config.icon .. '  ' .. config.text
-        label.TextColor3 = Color3.new(0.95, 0.95, 0.95)
-        label.TextScaled = false
-        label.TextSize = 17
-        label.Font = Enum.Font.SourceSans
-        label.TextXAlignment = Enum.TextXAlignment.Left
+        local label = Instance.new('TextLabel', statFrame);
+        label.Size = UDim2.new(1, -10, 1, 0);
+        label.Position = UDim2.new(0, 10, 0, 0);
+        label.BackgroundTransparency = 1;
+        label.Text = config.icon .. '  ' .. config.text;
+        label.TextColor3 = Color3.new(0.95, 0.95, 0.95);
+        label.TextScaled = false;
+        label.TextSize = 17;
+        label.Font = Enum.Font.SourceSans;
+        label.TextXAlignment = Enum.TextXAlignment.Left;
         
-        OverlayLabels[config.name] = label
-    end
+        OverlayLabels[config.name] = label;
+    end;
     
-    local ToggleButton = Instance.new('TextButton', Container)
-    ToggleButton.Size = UDim2.new(0, 180, 0, 40)
-    ToggleButton.Position = UDim2.new(0.5, -90, 1, -50)
-    ToggleButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
-    ToggleButton.Text = 'HIDE OVERLAY'
-    ToggleButton.TextColor3 = Color3.new(1, 1, 1)
-    ToggleButton.TextScaled = false
-    ToggleButton.TextSize = 16
-    ToggleButton.Font = Enum.Font.SourceSansBold
+    local ToggleButton = Instance.new('TextButton', Container);
+    ToggleButton.Size = UDim2.new(0, 180, 0, 40);
+    ToggleButton.Position = UDim2.new(0.5, -90, 1, -50);
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226);
+    ToggleButton.Text = 'HIDE OVERLAY';
+    ToggleButton.TextColor3 = Color3.new(1, 1, 1);
+    ToggleButton.TextScaled = false;
+    ToggleButton.TextSize = 16;
+    ToggleButton.Font = Enum.Font.SourceSansBold;
     
-    local ButtonCorner = Instance.new('UICorner', ToggleButton)
-    ButtonCorner.CornerRadius = UDim.new(0, 10)
+    local ButtonCorner = Instance.new('UICorner', ToggleButton);
+    ButtonCorner.CornerRadius = UDim.new(0, 10);
     
-    local ButtonStroke = Instance.new('UIStroke', ToggleButton)
-    ButtonStroke.Color = Color3.new(0, 0, 0)
-    ButtonStroke.Thickness = 2
-    ButtonStroke.Transparency = 0.5
+    local ButtonStroke = Instance.new('UIStroke', ToggleButton);
+    ButtonStroke.Color = Color3.new(0, 0, 0);
+    ButtonStroke.Thickness = 2;
+    ButtonStroke.Transparency = 0.5;
     
-    local ShowButton = Instance.new('TextButton', OverlayGui)
-    ShowButton.Size = UDim2.new(0, 180, 0, 40)
-    ShowButton.Position = UDim2.new(0.5, -90, 1, -100)
-    ShowButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
-    ShowButton.BackgroundTransparency = 0.6
-    ShowButton.Text = 'SHOW OVERLAY'
-    ShowButton.TextColor3 = Color3.new(1, 1, 1)
-    ShowButton.TextScaled = false
-    ShowButton.TextSize = 16
-    ShowButton.Font = Enum.Font.SourceSansBold
-    ShowButton.Visible = false
+    local ShowButton = Instance.new('TextButton', OverlayGui);
+    ShowButton.Size = UDim2.new(0, 180, 0, 40);
+    ShowButton.Position = UDim2.new(0.5, -90, 1, -100);
+    ShowButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226);
+    ShowButton.BackgroundTransparency = 0.6;
+    ShowButton.Text = 'SHOW OVERLAY';
+    ShowButton.TextColor3 = Color3.new(1, 1, 1);
+    ShowButton.TextScaled = false;
+    ShowButton.TextSize = 16;
+    ShowButton.Font = Enum.Font.SourceSansBold;
+    ShowButton.Visible = false;
     
-    local ShowButtonCorner = Instance.new('UICorner', ShowButton)
-    ShowButtonCorner.CornerRadius = UDim.new(0, 10)
+    local ShowButtonCorner = Instance.new('UICorner', ShowButton);
+    ShowButtonCorner.CornerRadius = UDim.new(0, 10);
     
-    local ShowButtonStroke = Instance.new('UIStroke', ShowButton)
-    ShowButtonStroke.Color = Color3.new(0, 0, 0)
-    ShowButtonStroke.Thickness = 2
-    ShowButtonStroke.Transparency = 0.7
+    local ShowButtonStroke = Instance.new('UIStroke', ShowButton);
+    ShowButtonStroke.Color = Color3.new(0, 0, 0);
+    ShowButtonStroke.Thickness = 2;
+    ShowButtonStroke.Transparency = 0.7;
     
     OverlayMaid:AddTask(ToggleButton.MouseButton1Click:Connect(function()
-        Container.Visible = false
-        DarkOverlay.Visible = false
-        ImageLabel.Visible = false
-        ShowButton.Visible = true
-        game:GetService("RunService"):Set3dRenderingEnabled(true);
-    end), "3DRendering")
+        Container.Visible = false;
+        DarkOverlay.Visible = false;
+        ImageLabel.Visible = false;
+        ShowButton.Visible = true;
+        ApplyPerformanceSettings(false);
+    end), "Overlay");
     
     OverlayMaid:AddTask(ShowButton.MouseButton1Click:Connect(function()
-        Container.Visible = true
-        DarkOverlay.Visible = true
-        ImageLabel.Visible = true
-        ShowButton.Visible = false
-        game:GetService("RunService"):Set3dRenderingEnabled(false);
-    end), "3DRendering")
+        Container.Visible = true;
+        DarkOverlay.Visible = true;
+        ImageLabel.Visible = true;
+        ShowButton.Visible = false;
+        ApplyPerformanceSettings(true);
+    end), "Overlay");
     
     OverlayMaid:AddTask(ToggleButton.MouseEnter:Connect(function()
         game:GetService("TweenService"):Create(ToggleButton, TweenInfo.new(0.2), {
             BackgroundColor3 = Color3.fromRGB(75, 0, 130)
-        }):Play()
-    end), "3DRendering")
+        }):Play();
+    end), "Overlay");
     
     OverlayMaid:AddTask(ToggleButton.MouseLeave:Connect(function()
         game:GetService("TweenService"):Create(ToggleButton, TweenInfo.new(0.2), {
             BackgroundColor3 = Color3.fromRGB(138, 43, 226)
-        }):Play()
-    end), "3DRendering")
-    return OverlayGui
-end
+        }):Play();
+    end), "Overlay");
+    
+    return OverlayGui;
+end;
 
 function OverlaySystem.Toggle3DRendering(enabled)
-    OverlayMaid:Cleanup("3DRendering");
     if enabled then
-        CreateOverlay()
-        
-        task.wait(0.1)
-        game:GetService("RunService"):Set3dRenderingEnabled(false);
-        
-        if OverlayGui then
-            OverlayMaid:AddTask(function()
-                if OverlayGui then
-                    OverlayGui:Destroy()
-                    OverlayGui = nil
-                end
-                game:GetService("RunService"):Set3dRenderingEnabled(true);
-            end, "3DRendering");
-        end
+        CreateOverlay();
+        task.wait(0.1);
+        ApplyPerformanceSettings(true);
     else
+        OverlayMaid:Cleanup("Overlay");
         if OverlayGui then
-            OverlayGui:Destroy()
-            OverlayGui = nil
-        end
-        game:GetService("RunService"):Set3dRenderingEnabled(true);
-    end
-end
+            OverlayGui:Destroy();
+            OverlayGui = nil;
+        end;
+        OverlayLabels = {};
+        ApplyPerformanceSettings(false);
+    end;
+end;
 
 function OverlaySystem.UpdateStats(data)
-    if not OverlayGui then return end
+    if not OverlayGui then return; end;
     
     if data.task and OverlayLabels.Task then
-        OverlayLabels.Task.Text = '📋  Current Task: ' .. data.task
-    end
+        OverlayLabels.Task.Text = '📋  Current Task: ' .. data.task;
+    end;
     if data.bucks and OverlayLabels.Bucks then
-        OverlayLabels.Bucks.Text = '💰  Bucks: ' .. tostring(data.bucks)
-    end
+        OverlayLabels.Bucks.Text = '💰  Bucks: ' .. tostring(data.bucks);
+    end;
     if data.potions and OverlayLabels.Potions then
-        OverlayLabels.Potions.Text = '🧪  Age Potions: ' .. tostring(data.potions)
-    end
+        OverlayLabels.Potions.Text = '🧪  Age Potions: ' .. tostring(data.potions);
+    end;
     if data.runtime and OverlayLabels.Runtime then
-        OverlayLabels.Runtime.Text = '⏱️  Runtime: ' .. data.runtime
-    end
+        OverlayLabels.Runtime.Text = '⏱️  Runtime: ' .. data.runtime;
+    end;
     if data.location and OverlayLabels.Location then
-        OverlayLabels.Location.Text = '📍  Location: ' .. data.location
-    end
+        OverlayLabels.Location.Text = '📍  Location: ' .. data.location;
+    end;
     if data.eventCurrency and OverlayLabels.EventCurrency then
-        OverlayLabels.EventCurrency.Text = '🎃  Event Currency: ' .. tostring(data.eventCurrency)
-    end
+        OverlayLabels.EventCurrency.Text = '🎃  Event Currency: ' .. tostring(data.eventCurrency);
+    end;
     if data.yarnApples and OverlayLabels.YarnApples then
-        OverlayLabels.YarnApples.Text = '🧶  Yarn Apples: ' .. tostring(data.yarnApples)
-    end
+        OverlayLabels.YarnApples.Text = '🧶  Yarn Apples: ' .. tostring(data.yarnApples);
+    end;
     if data.catBatProgress and OverlayLabels.CatBatProgress then
-        OverlayLabels.CatBatProgress.Text = '🦇  Cat Bat: ' .. math.floor(data.catBatProgress) .. '%'
-    end
-end
+        OverlayLabels.CatBatProgress.Text = '🦇  Cat Bat: ' .. math.floor(data.catBatProgress) .. '%';
+    end;
+end;
 
 function OverlaySystem.Destroy()
+    ApplyPerformanceSettings(false);
     OverlayMaid:Cleanup();
     if OverlayGui then
-        OverlayGui:Destroy()
-        OverlayGui = nil
-    end
-    UpdateQueue = {}
-end
+        OverlayGui:Destroy();
+        OverlayGui = nil;
+    end;
+    OverlayLabels = {};
+    CachedAsset = nil;
+    OriginalSettings = {};
+end;
 
 return OverlaySystem;
