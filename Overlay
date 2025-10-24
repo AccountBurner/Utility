@@ -1,345 +1,285 @@
-local MaidSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Maid.lua");
-local SignalSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Signal");
-local ServicesSource = game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Services");
+local Maid = loadstring(game:HttpGet("https://raw.githubusercontent.com/AccountBurner/Utility/refs/heads/main/Maid.lua"))();
 
-local Maid = loadstring(MaidSource)();
-local Signal = loadstring(SignalSource)();
-local Services = loadstring(ServicesSource)();
+local OverlaySystem = {};
+local OverlayMaid = Maid.new();
+local OverlayGui = nil;
+local OverlayLabels = {};
+local CachedAsset = nil;
+local OriginalSettings = {};
 
-local TweenService, CoreGui, UserInputService, GuiService = Services:Get('TweenService', 'CoreGui', 'UserInputService', 'GuiService');
-
-local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
-local GetHUI = gethui or (function() return CoreGui end);
-
-local NotificationSystem = {};
-NotificationSystem.__index = NotificationSystem;
-
-local NOTIFICATION_PADDING = 10;
-local NOTIFICATION_GAP = 5;
-local NOTIFICATION_DURATION = 5;
-local NOTIFICATION_WIDTH = 300;
-local NOTIFICATION_HEIGHT = 80;
-local NOTIFICATION_CORNER_RADIUS = 4;
-local TWEEN_INFO = TweenInfo.new(0.3, Enum.EasingStyle.Quint);
-local PROGRESS_TWEEN_INFO = TweenInfo.new(NOTIFICATION_DURATION, Enum.EasingStyle.Linear);
-
-local function generateRandomString()
-    local chars = {};
-    for i = 1, math.random(8, 16) do
-        chars[i] = string.char(math.random(97, 122));
-    end;
-    return table.concat(chars);
-end;
-
-local THEME = {
-    Background = Color3.fromRGB(30, 30, 30),
-    Text = Color3.fromRGB(255, 255, 255),
-    SubText = Color3.fromRGB(180, 180, 180),
+local function GetOrCreateAsset()
+    if CachedAsset then return CachedAsset; end;
     
-    Types = {
-        Info = {
-            Color = Color3.fromRGB(78, 131, 255)
-        },
-        Success = {
-            Color = Color3.fromRGB(85, 170, 127)
-        },
-        Warning = {
-            Color = Color3.fromRGB(245, 179, 66)
-        },
-        Error = {
-            Color = Color3.fromRGB(235, 87, 87)
-        }
-    }
-};
-
-local ActiveNotifications = {};
-
-local Container = Instance.new("ScreenGui");
-Container.Name = generateRandomString();
-Container.ResetOnSpawn = false;
-Container.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
-Container.Enabled = true;
-ProtectGui(Container);
-Container.Parent = GetHUI();
-
-local Notification = {};
-Notification.__index = Notification;
-
-local function createIconText(notifType)
-    if notifType == "Info" then
-        return "ℹ";
-    elseif notifType == "Success" then
-        return "✓";
-    elseif notifType == "Warning" then
-        return "⚠";
-    elseif notifType == "Error" then
-        return "X";
-    end;
-    return "";
-end;
-
-function Notification.new(options)
-    local self = setmetatable({}, Notification);
+    local url = 'https://raw.githubusercontent.com/AccountBurner/Utility/main/55279d991b8a4dcb35bcd36d26fb0cb9.png';
+    local path = 'zekehub_cover.png';
     
-    self.Type = options.Type or "Info";
-    self.Title = options.Title or "Notification";
-    self.Text = options.Text or "";
-    self.Duration = options.Duration or NOTIFICATION_DURATION;
-    self.Callback = options.Callback;
-    
-    self.Destroying = Signal.new();
-    self._maid = Maid.new();
-    
-    self:_init();
-    
-    return self;
-end;
-
-function Notification:GetScreenSize()
-    local viewport = workspace.CurrentCamera.ViewportSize;
-    local insets = GuiService:GetGuiInset();
-    return viewport.X, viewport.Y - insets.Y;
-end;
-
-function Notification:GetScaledSize()
-    local screenWidth, screenHeight = self:GetScreenSize();
-    local scale = math.min(screenWidth / 1920, 1);
-    
-    local width = math.min(NOTIFICATION_WIDTH * scale, screenWidth * 0.9);
-    local height = NOTIFICATION_HEIGHT * scale;
-    
-    return width, height;
-end;
-
-function Notification:_init()
-    local typeInfo = THEME.Types[self.Type];
-    local width, height = self:GetScaledSize();
-    local screenWidth, screenHeight = self:GetScreenSize();
-    
-    self.Frame = Instance.new("Frame");
-    self.Frame.Name = generateRandomString();
-    self.Frame.Size = UDim2.new(0, width, 0, height);
-    self.Frame.Position = UDim2.new(0, NOTIFICATION_PADDING, 1, NOTIFICATION_PADDING);
-    self.Frame.BackgroundColor3 = THEME.Background;
-    self.Frame.BorderSizePixel = 0;
-    self.Frame.AnchorPoint = Vector2.new(0, 1);
-    self.Frame.Parent = Container;
-    
-    local corner = Instance.new("UICorner");
-    corner.CornerRadius = UDim.new(0, NOTIFICATION_CORNER_RADIUS);
-    corner.Parent = self.Frame;
-    
-    self.Icon = Instance.new("TextLabel");
-    self.Icon.Name = generateRandomString();
-    self.Icon.Size = UDim2.new(0, 24 * (height/NOTIFICATION_HEIGHT), 0, 24 * (height/NOTIFICATION_HEIGHT));
-    self.Icon.Position = UDim2.new(0, 16 * (width/NOTIFICATION_WIDTH), 0.5, 0);
-    self.Icon.AnchorPoint = Vector2.new(0, 0.5);
-    self.Icon.BackgroundTransparency = 1;
-    self.Icon.Text = createIconText(self.Type);
-    self.Icon.Font = Enum.Font.GothamBold;
-    self.Icon.TextSize = 20 * (height/NOTIFICATION_HEIGHT);
-    self.Icon.TextColor3 = typeInfo.Color;
-    self.Icon.Parent = self.Frame;
-    
-    local iconSize = self.Icon.Size.X.Offset;
-    
-    self.TitleLabel = Instance.new("TextLabel");
-    self.TitleLabel.Name = generateRandomString();
-    self.TitleLabel.Size = UDim2.new(1, -iconSize - 50, 0, 20 * (height/NOTIFICATION_HEIGHT));
-    self.TitleLabel.Position = UDim2.new(0, iconSize + 30, 0, 16 * (height/NOTIFICATION_HEIGHT));
-    self.TitleLabel.BackgroundTransparency = 1;
-    self.TitleLabel.Text = self.Title;
-    self.TitleLabel.Font = Enum.Font.GothamBold;
-    self.TitleLabel.TextSize = 14 * (height/NOTIFICATION_HEIGHT);
-    self.TitleLabel.TextColor3 = THEME.Text;
-    self.TitleLabel.TextXAlignment = Enum.TextXAlignment.Left;
-    self.TitleLabel.Parent = self.Frame;
-    
-    self.TextLabel = Instance.new("TextLabel");
-    self.TextLabel.Name = generateRandomString();
-    self.TextLabel.Size = UDim2.new(1, -iconSize - 50, 0, 30 * (height/NOTIFICATION_HEIGHT));
-    self.TextLabel.Position = UDim2.new(0, iconSize + 30, 0, 36 * (height/NOTIFICATION_HEIGHT));
-    self.TextLabel.BackgroundTransparency = 1;
-    self.TextLabel.Text = self.Text;
-    self.TextLabel.Font = Enum.Font.Gotham;
-    self.TextLabel.TextSize = 14 * (height/NOTIFICATION_HEIGHT);
-    self.TextLabel.TextColor3 = THEME.SubText;
-    self.TextLabel.TextXAlignment = Enum.TextXAlignment.Left;
-    self.TextLabel.TextWrapped = true;
-    self.TextLabel.Parent = self.Frame;
-    
-    self.CloseButton = Instance.new("TextButton");
-    self.CloseButton.Name = generateRandomString();
-    self.CloseButton.Size = UDim2.new(0, 16 * (height/NOTIFICATION_HEIGHT), 0, 16 * (height/NOTIFICATION_HEIGHT));
-    self.CloseButton.Position = UDim2.new(1, -24 * (width/NOTIFICATION_WIDTH), 0, 16 * (height/NOTIFICATION_HEIGHT));
-    self.CloseButton.BackgroundTransparency = 1;
-    self.CloseButton.Text = "X";
-    self.CloseButton.Font = Enum.Font.Gotham;
-    self.CloseButton.TextSize = 14 * (height/NOTIFICATION_HEIGHT);
-    self.CloseButton.TextColor3 = THEME.SubText;
-    self.CloseButton.Parent = self.Frame;
-    
-    self.ProgressContainer = Instance.new("Frame");
-    self.ProgressContainer.Name = generateRandomString();
-    self.ProgressContainer.Size = UDim2.new(1, 0, 0, 4);
-    self.ProgressContainer.Position = UDim2.new(0, 0, 1, -4);
-    self.ProgressContainer.BackgroundTransparency = 0.9;
-    self.ProgressContainer.BackgroundColor3 = Color3.fromRGB(100, 100, 100);
-    self.ProgressContainer.BorderSizePixel = 0;
-    self.ProgressContainer.Parent = self.Frame;
-    
-    self.ProgressBar = Instance.new("Frame");
-    self.ProgressBar.Name = generateRandomString();
-    self.ProgressBar.Size = UDim2.new(1, 0, 1, 0);
-    self.ProgressBar.BackgroundColor3 = typeInfo.Color;
-    self.ProgressBar.BorderSizePixel = 0;
-    self.ProgressBar.Parent = self.ProgressContainer;
-    
-    self._maid:AddTask(self.CloseButton.MouseButton1Click:Connect(function()
-        self:Destroy();
-    end));
-    
-    table.insert(ActiveNotifications, self);
-    
-    self:UpdatePositions();
-    
-    local targetPosition = UDim2.new(0, NOTIFICATION_PADDING, 1, -NOTIFICATION_PADDING);
-    TweenService:Create(self.Frame, TWEEN_INFO, {Position = targetPosition, AnchorPoint = Vector2.new(0, 1)}):Play();
-    
-    local progressTween = TweenService:Create(self.ProgressBar, PROGRESS_TWEEN_INFO, {Size = UDim2.new(0, 0, 1, 0)});
-    progressTween:Play();
-    
-    self._maid:AddTask(progressTween.Completed:Connect(function()
-        if self._destroyed then return end;
-        self:Destroy();
-    end));
-    
-    if self.Callback then
-        self.ClickableArea = Instance.new("TextButton");
-        self.ClickableArea.Name = generateRandomString();
-        self.ClickableArea.Size = UDim2.new(1, 0, 1, -4);
-        self.ClickableArea.Position = UDim2.new(0, 0, 0, 0);
-        self.ClickableArea.BackgroundTransparency = 1;
-        self.ClickableArea.Text = "";
-        self.ClickableArea.Parent = self.Frame;
-        
-        self._maid:AddTask(self.ClickableArea.MouseButton1Click:Connect(function()
-            self.Callback();
-            self:Destroy();
-        end));
+    if not isfile(path) then
+        writefile(path, game:HttpGet(url));
     end;
     
-    return self;
+    CachedAsset = getcustomasset(path);
+    return CachedAsset;
 end;
 
-function Notification:UpdatePositions()
-    local totalHeight = 0;
+local function ApplyPerformanceSettings(enable)
+    local Lighting = game:GetService("Lighting");
     
-    for i = #ActiveNotifications, 1, -1 do
-        local notif = ActiveNotifications[i];
-        if notif._destroyed then continue end;
+    if enable then
+        OriginalSettings = {
+            QualityLevel = settings().Rendering.QualityLevel,
+            MeshPartDetailLevel = settings().Rendering.MeshPartDetailLevel,
+            GlobalShadows = Lighting.GlobalShadows,
+            Technology = Lighting.Technology
+        };
         
-        local width, height = notif:GetScaledSize();
-        
-        local newY = -NOTIFICATION_PADDING - totalHeight;
-        local targetPosition = UDim2.new(0, NOTIFICATION_PADDING, 1, newY);
-        
-        if notif == self then
-            notif.originalPosition = targetPosition;
-        else
-            TweenService:Create(notif.Frame, TWEEN_INFO, {
-                Position = targetPosition,
-                AnchorPoint = Vector2.new(0, 1)
-            }):Play();
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01;
+        settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level01;
+        Lighting.GlobalShadows = false;
+        Lighting.Technology = Enum.Technology.Compatibility;
+    else
+        if OriginalSettings.QualityLevel then
+            settings().Rendering.QualityLevel = OriginalSettings.QualityLevel;
+            settings().Rendering.MeshPartDetailLevel = OriginalSettings.MeshPartDetailLevel;
+            Lighting.GlobalShadows = OriginalSettings.GlobalShadows;
+            Lighting.Technology = OriginalSettings.Technology;
         end;
-        
-        totalHeight = totalHeight + height + NOTIFICATION_GAP;
+        OriginalSettings = {};
     end;
 end;
 
-function Notification:Destroy()
-    if self._destroyed then return end;
-    self._destroyed = true;
+local function CreateOverlay()
+    if OverlayGui then 
+        OverlayGui:Destroy();
+        OverlayGui = nil;
+    end;
     
-    self.Destroying:Fire();
+    OverlayMaid:Cleanup("Overlay");
     
-    local targetPosition = UDim2.new(0.5, 0, 1, NOTIFICATION_PADDING);
-    local tween = TweenService:Create(self.Frame, TWEEN_INFO, {
-        Position = targetPosition,
-        Transparency = 1
-    });
+    local asset = GetOrCreateAsset();
     
-    tween:Play();
+    OverlayGui = Instance.new('ScreenGui');
+    OverlayGui.IgnoreGuiInset = true;
+    OverlayGui.ResetOnSpawn = false;
+    OverlayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
+    OverlayGui.DisplayOrder = 10;
+    OverlayGui.Parent = gethui and gethui() or game:GetService("CoreGui");
     
-    self._maid:AddTask(tween.Completed:Connect(function()
-        local index = table.find(ActiveNotifications, self);
-        if index then
-            table.remove(ActiveNotifications, index);
-        end;
+    OverlayMaid:AddTask(OverlayGui, "Overlay");
+    
+    local ImageLabel = Instance.new('ImageLabel', OverlayGui);
+    ImageLabel.Size = UDim2.new(1, 0, 1, 0);
+    ImageLabel.Position = UDim2.new(0, 0, 0, 0);
+    ImageLabel.BackgroundTransparency = 1;
+    ImageLabel.Image = asset;
+    ImageLabel.ScaleType = Enum.ScaleType.Stretch;
+    
+    local DarkOverlay = Instance.new('Frame', OverlayGui);
+    DarkOverlay.Size = UDim2.new(1, 0, 1, 0);
+    DarkOverlay.BackgroundColor3 = Color3.new(0, 0, 0);
+    DarkOverlay.BackgroundTransparency = 0.4;
+    DarkOverlay.BorderSizePixel = 0;
+    
+    local Container = Instance.new('Frame', OverlayGui);
+    Container.Size = UDim2.new(0, 450, 0, 400);
+    Container.Position = UDim2.new(0.5, -225, 0.5, -200);
+    Container.BackgroundColor3 = Color3.new(0.05, 0.05, 0.05);
+    Container.BackgroundTransparency = 0.05;
+    Container.BorderSizePixel = 0;
+    
+    local UICorner = Instance.new('UICorner', Container);
+    UICorner.CornerRadius = UDim.new(0, 16);
+    
+    local UIStroke = Instance.new('UIStroke', Container);
+    UIStroke.Color = Color3.fromRGB(138, 43, 226);
+    UIStroke.Thickness = 2.5;
+    UIStroke.Transparency = 0.3;
+    
+    local Gradient = Instance.new('UIGradient', UIStroke);
+    Gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(75, 0, 130)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(138, 43, 226))
+    };
+    
+    local DiscordLabel = Instance.new('TextLabel', Container);
+    DiscordLabel.Size = UDim2.new(1, 0, 0, 45);
+    DiscordLabel.Position = UDim2.new(0, 0, 0, 8);
+    DiscordLabel.BackgroundTransparency = 1;
+    DiscordLabel.Text = 'discord.gg/zekehub';
+    DiscordLabel.TextColor3 = Color3.new(1, 1, 1);
+    DiscordLabel.TextScaled = false;
+    DiscordLabel.TextSize = 28;
+    DiscordLabel.Font = Enum.Font.SourceSansBold;
+    
+    local DiscordStroke = Instance.new('UIStroke', DiscordLabel);
+    DiscordStroke.Color = Color3.new(0, 0, 0);
+    DiscordStroke.Thickness = 2;
+    
+    local StatsContainer = Instance.new('Frame', Container);
+    StatsContainer.Size = UDim2.new(1, -30, 0, 270);
+    StatsContainer.Position = UDim2.new(0, 15, 0, 60);
+    StatsContainer.BackgroundTransparency = 1;
+    
+    OverlayLabels = {};
+    local statConfigs = {
+        {name = 'Task', text = 'Current Task: None', icon = '📋'},
+        {name = 'Bucks', text = 'Bucks: 0', icon = '💰'},
+        {name = 'Potions', text = 'Age Potions: 0', icon = '🧪'},
+        {name = 'Runtime', text = 'Runtime: 00:00', icon = '⏱️'},
+        {name = 'Location', text = 'Location: Unknown', icon = '📍'},
+        {name = 'EventCurrency', text = 'Event Currency: 0', icon = '🎃'},
+        {name = 'YarnApples', text = 'Yarn Apples: 0', icon = '🧶'},
+        {name = 'CatBatProgress', text = 'Cat Bat: 0%', icon = '🦇'}
+    };
+    
+    for i, config in ipairs(statConfigs) do
+        local statFrame = Instance.new('Frame', StatsContainer);
+        statFrame.Size = UDim2.new(1, 0, 0, 30);
+        statFrame.Position = UDim2.new(0, 0, 0, (i-1) * 34);
+        statFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1);
+        statFrame.BackgroundTransparency = 0.7;
         
-        if #ActiveNotifications > 0 then
-            ActiveNotifications[1]:UpdatePositions();
-        end;
+        local statCorner = Instance.new('UICorner', statFrame);
+        statCorner.CornerRadius = UDim.new(0, 8);
         
-        self.Frame:Destroy();
-        self._maid:Clean();
-    end));
+        local label = Instance.new('TextLabel', statFrame);
+        label.Size = UDim2.new(1, -10, 1, 0);
+        label.Position = UDim2.new(0, 10, 0, 0);
+        label.BackgroundTransparency = 1;
+        label.Text = config.icon .. '  ' .. config.text;
+        label.TextColor3 = Color3.new(0.95, 0.95, 0.95);
+        label.TextScaled = false;
+        label.TextSize = 17;
+        label.Font = Enum.Font.SourceSans;
+        label.TextXAlignment = Enum.TextXAlignment.Left;
+        
+        OverlayLabels[config.name] = label;
+    end;
+    
+    local ToggleButton = Instance.new('TextButton', Container);
+    ToggleButton.Size = UDim2.new(0, 180, 0, 40);
+    ToggleButton.Position = UDim2.new(0.5, -90, 1, -50);
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226);
+    ToggleButton.Text = 'HIDE OVERLAY';
+    ToggleButton.TextColor3 = Color3.new(1, 1, 1);
+    ToggleButton.TextScaled = false;
+    ToggleButton.TextSize = 16;
+    ToggleButton.Font = Enum.Font.SourceSansBold;
+    
+    local ButtonCorner = Instance.new('UICorner', ToggleButton);
+    ButtonCorner.CornerRadius = UDim.new(0, 10);
+    
+    local ButtonStroke = Instance.new('UIStroke', ToggleButton);
+    ButtonStroke.Color = Color3.new(0, 0, 0);
+    ButtonStroke.Thickness = 2;
+    ButtonStroke.Transparency = 0.5;
+    
+    local ShowButton = Instance.new('TextButton', OverlayGui);
+    ShowButton.Size = UDim2.new(0, 180, 0, 40);
+    ShowButton.Position = UDim2.new(0.5, -90, 1, -100);
+    ShowButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226);
+    ShowButton.BackgroundTransparency = 0.6;
+    ShowButton.Text = 'SHOW OVERLAY';
+    ShowButton.TextColor3 = Color3.new(1, 1, 1);
+    ShowButton.TextScaled = false;
+    ShowButton.TextSize = 16;
+    ShowButton.Font = Enum.Font.SourceSansBold;
+    ShowButton.Visible = false;
+    
+    local ShowButtonCorner = Instance.new('UICorner', ShowButton);
+    ShowButtonCorner.CornerRadius = UDim.new(0, 10);
+    
+    local ShowButtonStroke = Instance.new('UIStroke', ShowButton);
+    ShowButtonStroke.Color = Color3.new(0, 0, 0);
+    ShowButtonStroke.Thickness = 2;
+    ShowButtonStroke.Transparency = 0.7;
+    
+    OverlayMaid:AddTask(ToggleButton.MouseButton1Click:Connect(function()
+        Container.Visible = false;
+        DarkOverlay.Visible = false;
+        ImageLabel.Visible = false;
+        ShowButton.Visible = true;
+        ApplyPerformanceSettings(false);
+    end), "Overlay");
+    
+    OverlayMaid:AddTask(ShowButton.MouseButton1Click:Connect(function()
+        Container.Visible = true;
+        DarkOverlay.Visible = true;
+        ImageLabel.Visible = true;
+        ShowButton.Visible = false;
+        ApplyPerformanceSettings(true);
+    end), "Overlay");
+    
+    OverlayMaid:AddTask(ToggleButton.MouseEnter:Connect(function()
+        game:GetService("TweenService"):Create(ToggleButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(75, 0, 130)
+        }):Play();
+    end), "Overlay");
+    
+    OverlayMaid:AddTask(ToggleButton.MouseLeave:Connect(function()
+        game:GetService("TweenService"):Create(ToggleButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(138, 43, 226)
+        }):Play();
+    end), "Overlay");
+    
+    return OverlayGui;
 end;
 
-function NotificationSystem.new()
-    local self = setmetatable({}, NotificationSystem);
-    self._maid = Maid.new();
-    return self;
-end;
-
-function NotificationSystem:Create(options)
-    return Notification.new(options);
-end;
-
-function NotificationSystem:Notify(title, message, notificationType, duration, callback)
-    return self:Create({
-        Title = title,
-        Text = message,
-        Type = notificationType or "Info",
-        Duration = duration,
-        Callback = callback
-    });
-end;
-
-function NotificationSystem:Info(title, message, duration, callback)
-    return self:Notify(title, message, "Info", duration, callback);
-end;
-
-function NotificationSystem:Success(title, message, duration, callback)
-    return self:Notify(title, message, "Success", duration, callback);
-end;
-
-function NotificationSystem:Warning(title, message, duration, callback)
-    return self:Notify(title, message, "Warning", duration, callback);
-end;
-
-function NotificationSystem:Error(title, message, duration, callback)
-    return self:Notify(title, message, "Error", duration, callback);
-end;
-
-function NotificationSystem:ClearAll()
-    for _, notification in ipairs(ActiveNotifications) do
-        notification:Destroy();
+function OverlaySystem.Toggle3DRendering(enabled)
+    if enabled then
+        CreateOverlay();
+        task.wait(0.1);
+        ApplyPerformanceSettings(true);
+    else
+        OverlayMaid:Cleanup("Overlay");
+        if OverlayGui then
+            OverlayGui:Destroy();
+            OverlayGui = nil;
+        end;
+        OverlayLabels = {};
+        ApplyPerformanceSettings(false);
     end;
 end;
 
-function NotificationSystem:Destroy()
-    self:ClearAll();
-    self._maid:Clean();
+function OverlaySystem.UpdateStats(data)
+    if not OverlayGui then return; end;
+    
+    if data.task and OverlayLabels.Task then
+        OverlayLabels.Task.Text = '📋  Current Task: ' .. data.task;
+    end;
+    if data.bucks and OverlayLabels.Bucks then
+        OverlayLabels.Bucks.Text = '💰  Bucks: ' .. tostring(data.bucks);
+    end;
+    if data.potions and OverlayLabels.Potions then
+        OverlayLabels.Potions.Text = '🧪  Age Potions: ' .. tostring(data.potions);
+    end;
+    if data.runtime and OverlayLabels.Runtime then
+        OverlayLabels.Runtime.Text = '⏱️  Runtime: ' .. data.runtime;
+    end;
+    if data.location and OverlayLabels.Location then
+        OverlayLabels.Location.Text = '📍  Location: ' .. data.location;
+    end;
+    if data.eventCurrency and OverlayLabels.EventCurrency then
+        OverlayLabels.EventCurrency.Text = '🎃  Event Currency: ' .. tostring(data.eventCurrency);
+    end;
+    if data.yarnApples and OverlayLabels.YarnApples then
+        OverlayLabels.YarnApples.Text = '🧶  Yarn Apples: ' .. tostring(data.yarnApples);
+    end;
+    if data.catBatProgress and OverlayLabels.CatBatProgress then
+        OverlayLabels.CatBatProgress.Text = '🦇  Cat Bat: ' .. math.floor(data.catBatProgress) .. '%';
+    end;
 end;
 
-local Notifications = NotificationSystem.new()
-NotificationSystem:Info("Information", "This is an informational message")
-NotificationSystem:Warning("Warning", "This action may cause issues")
-NotificationSystem:Error("Error", "Something went wrong")
-return NotificationSystem.new();
---[[
-local Notifications = NotificationSystem.new()
-NotificationSystem:Info("Information", "This is an informational message")
-NotificationSystem:Warning("Warning", "This action may cause issues")
-NotificationSystem:Error("Error", "Something went wrong")]]
+function OverlaySystem.Destroy()
+    ApplyPerformanceSettings(false);
+    OverlayMaid:Cleanup();
+    if OverlayGui then
+        OverlayGui:Destroy();
+        OverlayGui = nil;
+    end;
+    OverlayLabels = {};
+    CachedAsset = nil;
+    OriginalSettings = {};
+end;
+
+return OverlaySystem;
